@@ -192,6 +192,7 @@
     <span class="lock-icon">&#128274;</span>
     <h2>Acceso privado</h2>
     <p>Este comparador es de uso interno.<br>Ingresa la contraseña para continuar.</p>
+    <input type="text" id="gateUser" placeholder="Usuario" autocomplete="off" style="margin-bottom:8px;">
     <input type="password" id="gatePassword" placeholder="Contraseña" autocomplete="off">
     <button id="gateSubmit">Entrar</button>
     <div class="err" id="gateErr"></div>
@@ -273,51 +274,50 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
    Puerta de acceso (password gate)
    -----------------------------------------------------------------
    No es seguridad real: todo corre en el navegador del visitante,
-   así que este código es visible para cualquiera que abra "Ver código
-   fuente". Solo detiene a quien no sepa la contraseña y no se moleste
-   en inspeccionar el código. Para cambiar la contraseña, genera un
-   nuevo hash SHA-256 (instrucciones abajo) y reemplaza GATE_HASH.
+   así que este código (usuarios y contraseñas incluidos) es visible
+   para cualquiera que abra "Ver código fuente". Solo detiene a quien
+   no sepa una combinación válida y no se moleste en inspeccionar el
+   código. No la uses para proteger datos realmente sensibles.
 
-   Cómo generar el hash de tu propia contraseña:
-   1. Abre este mismo archivo en el navegador.
-   2. Abre la consola (F12 → pestaña "Console").
-   3. Pega esto reemplazando TU_CONTRASEÑA por la que quieras usar:
-
-      crypto.subtle.digest('SHA-256', new TextEncoder().encode('TU_CONTRASEÑA'))
-        .then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')));
-
-   4. Copia el texto largo que imprime y pégalo abajo en GATE_HASH.
+   PARA AGREGAR, QUITAR O CAMBIAR USUARIOS:
+   Edita la lista de abajo directamente. Cada línea es un usuario:
+     "usuario": "contraseña",
+   No olvides la coma al final de cada línea excepto la última.
+   Guarda el archivo y súbelo a GitHub para que el cambio tome efecto.
    ===================================================================== */
-// Hash de ejemplo para la contraseña: "cambiaEsto2026"  <-- CÁMBIALA
-const GATE_HASH = "92e869de6451ee5a87db39e980156f86c87758a5b4ae9275fdd402245432c092";
-
-async function sha256Hex(text){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
-}
+const USERS = {
+  "profesor1": "clave123",
+  "profesor2": "clave321"
+  // agrega más líneas aquí, con el mismo formato:
+  // "nuevoUsuario": "suContraseña",
+};
 
 function unlockApp(){
   document.getElementById('gate').style.display = 'none';
   document.querySelectorAll('.gated-content').forEach(el=> el.classList.remove('gated-content'));
 }
 
-async function attemptUnlock(){
-  const input = document.getElementById('gatePassword');
+function attemptUnlock(){
+  const userInput = document.getElementById('gateUser');
+  const passInput = document.getElementById('gatePassword');
   const errBox = document.getElementById('gateErr');
-  const hash = await sha256Hex(input.value);
-  if(hash === GATE_HASH){
+  const user = userInput.value.trim();
+  const pass = passInput.value;
+
+  if(USERS.hasOwnProperty(user) && USERS[user] === pass){
     unlockApp();
   } else {
-    errBox.textContent = 'Contraseña incorrecta.';
+    errBox.textContent = 'Usuario o contraseña incorrectos.';
     const gate = document.getElementById('gate');
     gate.classList.remove('shake'); void gate.offsetWidth; gate.classList.add('shake');
-    input.value = ''; input.focus();
+    passInput.value = ''; passInput.focus();
   }
 }
 
 document.getElementById('gateSubmit').addEventListener('click', attemptUnlock);
+document.getElementById('gateUser').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('gatePassword').focus(); });
 document.getElementById('gatePassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') attemptUnlock(); });
-document.getElementById('gatePassword').focus();
+document.getElementById('gateUser').focus();
 
 /* =====================================================================
    Comparador de Preparación Profesional — lógica de la app
