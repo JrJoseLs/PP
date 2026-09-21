@@ -328,7 +328,8 @@ input[type=search]{-webkit-appearance:none;appearance:none;}
 }
 
 /* ---------------- Administración ---------------- */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
+@media (max-width:1100px){ .steps{grid-template-columns:repeat(2,1fr);} }
 .step{display:flex;gap:10px;align-items:center;text-align:left;background:var(--card);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;cursor:pointer;font-family:var(--sans);color:var(--ink);}
 .step:hover{border-color:var(--ink-soft);}
 .step .n{flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--paper-alt);font-weight:700;}
@@ -431,6 +432,14 @@ svg circle.dot:hover{fill-opacity:1;stroke:var(--ink);stroke-width:1.2;}
 .hist-item.on{border-color:var(--ink);border-left-color:var(--swatch);box-shadow:0 0 0 1px var(--ink);}
 .hist-arrow{font-family:var(--sans);font-size:12px;font-weight:700;}
 @media print{ .pf-result{border-color:#bbb;} }
+.imp-drop{border:2px dashed var(--rule);border-radius:3px;background:var(--card);padding:22px;text-align:center;cursor:pointer;font-family:var(--sans);font-size:13.5px;}
+.imp-drop:hover, .imp-drop.drag{border-color:var(--clay);background:var(--hover);}
+table.imp-sample{width:auto;margin:6px auto 0;font-size:12px;}
+table.imp-sample th, table.imp-sample td{padding:3px 10px;position:static;}
+.imp-summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-family:var(--sans);font-size:12.5px;}
+.imp-sel{min-width:200px;max-width:300px;width:100%;font-size:12.5px;padding:4px 6px;}
+#impTable tr.doubt td{background:var(--notice-bg);}
+#impFile{display:none;}
 .gate-note{font-family:var(--sans);font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin-top:8px;}
 .gate-note:empty{display:none;}
 

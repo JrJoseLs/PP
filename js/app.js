@@ -379,7 +379,7 @@ const SIN_GRUPO = "Sin grupo";
 const GENERAL = "__general__";
 const DATA_KEY = "pp_data";
 
-let classes = [];      // [{id,name,grupo,color,fileName,metrics,students:[{nombre,empresa,valores,carrera,grupo,matricula}]}]
+let classes = [];      // [{id,name,grupo,color,fileName,metrics,students:[{nombre,valores,carrera,grupo,matricula}]}]
 let roster = [];       // [{id,nombre,carrera,grupo,docente,asignatura,periodo}]
 let rosterFiles = [];
 let overrides = {};    // nameKey -> {carrera, grupo}  (asignados a mano en la tabla)
@@ -409,7 +409,6 @@ function saveRoster(){
 function minRoster(r){ return { id:r.id||"", nombre:r.nombre, carrera:r.carrera||"", grupo:r.grupo||"" }; }
 function minStudent(s){
   const o = { nombre:s.nombre, valores:s.valores };
-  if(s.empresa) o.empresa = s.empresa;
   if(s.carrera) o.carrera = s.carrera;
   if(s.grupo) o.grupo = s.grupo;
   if(s.matricula) o.matricula = s.matricula;
@@ -496,7 +495,7 @@ async function buildPublished(){
       name:c.name, grupo:c.grupo||"", color:c.color, metrics:c.metrics,
       students: c.students.map(s=>{
         const info = studentInfo(c, s);
-        return minStudent({ nombre:s.nombre, empresa:s.empresa, valores:s.valores.map(round2),
+        return minStudent({ nombre:s.nombre, valores:s.valores.map(round2),
           carrera:info.carrera, grupo: info.grupo!==c.grupo ? info.grupo : "", matricula:info.matricula });
       })
     };
@@ -651,7 +650,7 @@ function allRows(){
       carrera: carreraLabel(info.carrera),
       grupo: info.grupo || SIN_GRUPO,
       indice: generalIndex(c.metrics, s.valores),
-      q: normText(s.nombre+" "+(s.empresa||"")+" "+info.matricula)     // texto de búsqueda, una sola vez
+      q: normText(s.nombre+" "+info.matricula+" "+info.grupo)     // texto de búsqueda, una sola vez
     });
   }));
   rowsCache = out;
@@ -712,6 +711,12 @@ function mergeRoster(list, fileName){
   saveRoster();
 }
 
+/* "Grupo 1593", "grupo: 1593", "G-1593" -> "1593" */
+function normGroup(v){
+  const t = cleanCode(v).replace(/\s+/g," ");
+  const m = t.match(/^(?:grupo|secci[oó]n|g)\s*[-:#.]?\s*(.+)$/i);
+  return (m ? m[1] : t).trim();
+}
 function parseReport(rows, fallbackName){
   let headerIdx = -1;
   for(let i=0;i<rows.length;i++){
@@ -733,6 +738,9 @@ function parseReport(rows, fallbackName){
     else metricCols.push({ name:String(raw).trim(), c });
   }
   if(metricCols.length===0) metricCols = METRICS_FALLBACK.map((m,i)=>({name:m, c:2+i}));
+  // La 2ª columna ("Empresa" en el software del juego) se usa para escribir el grupo del estudiante.
+  // Si además existe una columna llamada "Grupo", esa tiene prioridad.
+  const col1Group = ["EMPRESA","GRUPO","SECCION","NRC","RNC"].includes(normText(header[1]));
 
   const students = [];
   for(let i=headerIdx+1;i<rows.length;i++){
@@ -744,10 +752,10 @@ function parseReport(rows, fallbackName){
     if(/promedios del juego/i.test(col1) || /^informe/i.test(col0)) continue;   // fila de promedios: se recalcula
     if(!col0) continue;
     students.push(minStudent({
-      nombre: col0.replace(/\s+/g," "), empresa: col1,
+      nombre: col0.replace(/\s+/g," "),
       valores: metricCols.map(m=>{ const v = r[m.c]; const n = (v===undefined||v===null||v==="") ? 0 : Number(v); return isNaN(n) ? 0 : round2(n); }),
       carrera: cCarrera>=0 ? cleanCode(r[cCarrera]).toUpperCase() : "",
-      grupo: cGrupo>=0 ? cleanCode(r[cGrupo]) : "",
+      grupo: cGrupo>=0 ? normGroup(r[cGrupo]) : (col1Group ? normGroup(col1) : ""),
       matricula: cMat>=0 ? cleanCode(r[cMat]) : ""
     }));
   }
@@ -905,7 +913,7 @@ function renderSidebar(){
         <label for="gr-${c.id}">Grupo</label>
         <input id="gr-${c.id}" class="grp" value="${esc(c.grupo||"")}" placeholder="ej. 1593" title="Se usa para los estudiantes que no aparecen en el listado">
       </div>
-      <div class="meta">${plural(c.students.length,"estudiante","estudiantes")}${sinCarrera ? ` &middot; <span class="warn-txt">${sinCarrera} sin carrera</span>` : " &middot; todos con carrera"}</div>
+      <div class="meta">${plural(c.students.length,"estudiante","estudiantes")}${sinCarrera ? ` &middot; <span class="warn-txt">${sinCarrera} sin carrera</span> <button class="link" type="button" data-import="${esc(c.id)}" title="Cargar un Excel con matrícula, nombre y carrera">completar</button>` : " &middot; todos con carrera"}</div>
       <div class="assign-sum">${who ? "Visible para: <b>"+esc(who)+"</b>" : '<span class="warn-txt">Sin asignar</span>'}
         <button class="link" type="button" data-assign="${esc(c.id)}">${who ? "Cambiar" : "Asignar"}</button></div>
       ${c.fileName ? `<div class="file" title="Archivo original">${esc(c.fileName)}</div>` : ""}
@@ -1921,7 +1929,7 @@ function renderPanelTabla(){
   panel.innerHTML = `
     <div class="row">
       ${filterFieldsHtml("tbl", stTbl, rowsAll, ["clase","carrera","grupo"])}
-      <div class="field"><label for="tblQ">Buscar</label><input class="input" id="tblQ" type="search" placeholder="Nombre, empresa o matrícula" value="${esc(stTbl.q)}"></div>
+      <div class="field"><label for="tblQ">Buscar</label><input class="input" id="tblQ" type="search" placeholder="Nombre, matrícula o grupo" value="${esc(stTbl.q)}"></div>
       <div class="field"><label>Columnas</label>${segHtml("tblCols",[{value:"todas",label:"Todas"},{value:"indice",label:"Solo índice"}], stTbl.cols)}</div>
       <button class="btn ghost" type="button" id="tblExport" title="Descarga lo que ves (con los filtros aplicados)">Exportar a Excel</button>
     </div>
@@ -1964,7 +1972,7 @@ function renderPanelTabla(){
 }
 const SORT_GETTERS = {
   "Clase": r=>r.cls.name, "Estudiante": r=>r.st.nombre, "Matrícula": r=>r.info.matricula,
-  "Carrera": r=>r.carrera, "Grupo": r=>r.grupo, "Empresa": r=>r.st.empresa||"", "Índice": r=>r.indice
+  "Carrera": r=>r.carrera, "Grupo": r=>r.grupo, "Índice": r=>r.indice
 };
 function tablaRows(){
   const metrics = allMetrics();
@@ -1984,7 +1992,7 @@ function tablaRows(){
 function drawTabla(){
   const { rows, metrics } = tablaRows();
   const shownMetrics = stTbl.cols==="todas" ? metrics : [];
-  const cols = ["Estudiante","Clase","Matrícula","Carrera","Grupo","Empresa","Índice", ...shownMetrics];
+  const cols = ["Estudiante","Clase","Matrícula","Carrera","Grupo","Índice", ...shownMetrics];
   const numCols = new Set(["Índice", ...metrics]);
   const admin = isAdmin();
   const head = cols.map(c=>{
@@ -2005,7 +2013,6 @@ function drawTabla(){
       <td><span class="class-tag" style="background:${r.cls.color}" title="${esc(r.cls.name)}">${esc(r.cls.name)}</span></td>
       <td>${esc(i.matricula)}</td>
       ${carreraCell}
-      <td>${esc(r.st.empresa||"")}</td>
       <td class="num ${heatClass(GENERAL,r.indice)}"><b>${fmt(r.indice)}</b></td>
       ${shownMetrics.map(m=>{ const v = metricValue(r.cls,r.st,m); return `<td class="num ${heatClass(m,v)}">${fmtVal(v)}</td>`; }).join("")}
     </tr>`;
@@ -2035,11 +2042,11 @@ function setOverride(r, field, value, inp){
 }
 function exportTabla(){
   const { rows, metrics } = tablaRows();
-  const aoa = [["Estudiante","Clase","Matrícula","Carrera","Nombre de la carrera","Grupo","Empresa","Índice general", ...metrics]];
-  rows.forEach(r=> aoa.push([r.st.nombre, r.cls.name, r.info.matricula, r.info.carrera, carreraNames[r.info.carrera]||"", r.info.grupo, r.st.empresa||"",
+  const aoa = [["Estudiante","Clase","Matrícula","Carrera","Nombre de la carrera","Grupo","Índice general", ...metrics]];
+  rows.forEach(r=> aoa.push([r.st.nombre, r.cls.name, r.info.matricula, r.info.carrera, carreraNames[r.info.carrera]||"", r.info.grupo,
     r.indice===null?null:+r.indice.toFixed(2), ...metrics.map(m=>metricValue(r.cls,r.st,m))]));
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = aoa[0].map((h,i)=>({ wch: i===0 ? 34 : i<8 ? Math.max(10, String(h).length+2) : 12 }));
+  ws["!cols"] = aoa[0].map((h,i)=>({ wch: i===0 ? 34 : i<7 ? Math.max(10, String(h).length+2) : 12 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Estudiantes");
   XLSX.writeFile(wb, "estudiantes-comparador.xlsx");
@@ -2047,8 +2054,8 @@ function exportTabla(){
 }
 
 /* ---------- Administración (solo admin) ----------
-   Tres pasos:  1 Usuarios  →  2 Asignar clases  →  3 Publicar           */
-let adminTab = "usuarios";     // usuarios | asignar | publicar
+   Cuatro pasos:  1 Usuarios → 2 Asignar clases → 3 Matrícula y carrera → 4 Publicar */
+let adminTab = "usuarios";     // usuarios | asignar | estudiantes | publicar
 let editingUser = null;        // null = formulario cerrado · "" = nuevo · "usuario" = editar
 let createdInfo = null;        // {usuario, pass} para mostrar la contraseña recién creada
 let highlightClass = null;     // clase a resaltar en "Asignar clases"
@@ -2061,6 +2068,8 @@ function adminStatus(){
   return {
     usuarios: { txt: plural(userDb.users.length,"usuario","usuarios"), warn: userDb.users.some(u=>!hasKeys(u)) },
     asignar:  { txt: !classes.length ? "Sin clases cargadas" : sinAsignar ? sinAsignar+" sin asignar" : "Todas asignadas", warn: !!sinAsignar && !!users.length },
+    estudiantes: (()=>{ const sin = allRows().filter(r=>r.carrera===SIN_CARRERA || !r.info.matricula).length;
+      return { txt: !classes.length ? "Sin clases cargadas" : sin ? sin+" sin carrera o matrícula" : "Todo completo", warn: sin>0 }; })(),
     publicar: { txt: pendU||pendD ? "Cambios pendientes" : "Todo publicado", warn: pendU||pendD }
   };
 }
@@ -2068,7 +2077,7 @@ function stepsHtml(){
   const st = adminStatus();
   const step = (n,id,title)=>`<button type="button" class="step ${adminTab===id?"active":""} ${st[id].warn?"warn":""}" data-admin-tab="${id}">
       <span class="n">${n}</span><span><b>${title}</b><small>${esc(st[id].txt)}</small></span></button>`;
-  return step(1,"usuarios","Usuarios") + step(2,"asignar","Asignar clases") + step(3,"publicar","Publicar");
+  return step(1,"usuarios","Usuarios") + step(2,"asignar","Asignar clases") + step(3,"estudiantes","Matrícula y carrera") + step(4,"publicar","Publicar");
 }
 function refreshAdminChrome(){
   if($("adminSteps")) $("adminSteps").innerHTML = stepsHtml();
@@ -2078,6 +2087,7 @@ function renderPanelUsuarios(){
   const panel = $("panel-usuarios");
   panel.innerHTML = `<div class="steps" id="adminSteps">${stepsHtml()}</div><div id="adminBody"></div>`;
   if(adminTab==="asignar") drawAdminAsignar();
+  else if(adminTab==="estudiantes") drawAdminImport();
   else if(adminTab==="publicar") drawAdminPublicar();
   else drawAdminUsuarios();
 }
@@ -2306,7 +2316,7 @@ function drawAdminAsignar(){
         </tr>`).join("")}</tbody>
       </table>
     </div>
-    <div class="row mt"><button class="btn" type="button" data-admin-tab="publicar">Siguiente: publicar →</button></div>
+    <div class="row mt"><button class="btn" type="button" data-admin-tab="estudiantes">Siguiente: matrícula y carrera →</button></div>
   `;
   highlightClass = null;
   const mx = $("mxTable");
@@ -2330,7 +2340,185 @@ function drawAdminAsignar(){
   });
 }
 
-/* ----- Paso 3: publicar (directo a GitHub o a mano) ----- */
+/* ----- Paso 3: matrícula y carrera de una clase desde un Excel (solo admin) -----
+   El Excel trae 3 columnas: matrícula, nombre y carrera (con o sin encabezados).
+   Se compara cada nombre con los estudiantes de la clase elegida (sin importar
+   el orden de nombres/apellidos ni los acentos) y se muestra una vista previa
+   para revisar y corregir antes de guardar.                                     */
+const stImp = { clase:null, fileName:"", rows:[], picks:[], auto:[] };
+
+function nameScore(aToks, bToks){
+  let inter = 0; aToks.forEach(x=>{ if(bToks.has(x)) inter++; });
+  const ok = inter>=3 || (inter>=2 && inter===Math.min(aToks.size, bToks.size));
+  return { ok, score: inter ? inter/(aToks.size+bToks.size-inter) : 0 };
+}
+/* Lee la hoja: busca encabezados (MATRÍCULA / NOMBRE / CARRERA); si no hay, adivina por el contenido */
+function parseStudentSheet(rows){
+  let start = 0, cM = -1, cN = -1, cC = -1;
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const n = (rows[i]||[]).map(v=>normText(v));
+    const iN = n.findIndex(v=>["NOMBRE","NOMBRES","NOMBRE COMPLETO","ESTUDIANTE","NOMBRE DEL ESTUDIANTE","NOMBRES Y APELLIDOS","APELLIDOS Y NOMBRES"].includes(v));
+    const iC = n.findIndex(v=>v==="CARRERA" || v==="PROGRAMA");
+    if(iN>=0 && iC>=0){ start = i+1; cN = iN; cC = iC; cM = n.findIndex(v=>["MATRICULA","MATRICULAS","ID","ID ESTUDIANTE","CODIGO"].includes(v)); break; }
+  }
+  if(cN<0){                                   // sin encabezados: se deduce qué columna es cada cosa
+    const sample = rows.filter(r=>r && r.some(v=>v!==null && String(v).trim()!=="")).slice(0,30);
+    const width = Math.max(0, ...sample.map(r=>r.length));
+    const stats = [];
+    for(let c=0;c<Math.min(width,6);c++){
+      const vals = sample.map(r=>cleanCode(r[c])).filter(Boolean);
+      if(!vals.length) continue;
+      stats.push({ c, words: mean(vals.map(v=>v.split(/\s+/).length)), mat: vals.filter(v=>/^[A-Za-z]?\d{5,}$/.test(v)).length/vals.length, len: mean(vals.map(v=>v.length)) });
+    }
+    const nom = stats.slice().sort((a,b)=>b.words-a.words)[0];
+    const mat = stats.filter(s=>s!==nom).sort((a,b)=>b.mat-a.mat)[0];
+    const car = stats.filter(s=>s!==nom && s!==mat).sort((a,b)=>a.len-b.len)[0];
+    if(!nom || !car) return [];
+    cN = nom.c; cC = car.c; cM = mat && mat.mat>=0.5 ? mat.c : -1;
+  }
+  const out = [];
+  for(let i=start;i<rows.length;i++){
+    const r = rows[i]; if(!r) continue;
+    const nombre = String(r[cN]==null?"":r[cN]).replace(/\s+/g," ").trim();
+    if(!nombre || nameTokens(nombre).length<2) continue;
+    out.push({ matricula: cM>=0 ? cleanCode(r[cM]) : "", nombre, carrera: cleanCode(r[cC]).toUpperCase(), toks:new Set(nameTokens(nombre)) });
+  }
+  return out;
+}
+/* Empareja cada estudiante de la clase con una fila del Excel */
+function autoMatch(cls, rows){
+  const byMat = new Map(rows.map((r,i)=>[r.matricula, i]).filter(([m])=>m));
+  const res = cls.students.map(st=>{
+    const info = studentInfo(cls, st);
+    if(info.matricula && byMat.has(info.matricula)) return { pick: byMat.get(info.matricula), state:"ok" };
+    const t = new Set(nameTokens(st.nombre));
+    const sc = rows.map((r,i)=>({ i, ...nameScore(t, r.toks) })).filter(x=>x.ok).sort((a,b)=>b.score-a.score);
+    if(!sc.length) return { pick:-1, state:"none" };
+    if(sc.length>1 && sc[1].score===sc[0].score) return { pick:sc[0].i, state:"doubt" };
+    return { pick: sc[0].i, state:"ok" };
+  });
+  // una fila del Excel usada por dos estudiantes: ambos quedan como dudosos
+  const uses = {}; res.forEach(r=>{ if(r.pick>=0) uses[r.pick] = (uses[r.pick]||0)+1; });
+  res.forEach(r=>{ if(r.pick>=0 && uses[r.pick]>1) r.state = "doubt"; });
+  return res;
+}
+function drawAdminImport(){
+  const body = $("adminBody");
+  if(!classes.length){ body.innerHTML = '<div class="placeholder">Aún no hay clases. Súbelas con "Cargar archivos" en la barra lateral.</div>'; return; }
+  if(!stImp.clase || !classes.some(c=>c.id===stImp.clase)){
+    const falta = classes.find(c=>c.students.some(s=>!studentInfo(c,s).carrera || !studentInfo(c,s).matricula));
+    stImp.clase = (falta || classes[0]).id; stImp.rows = []; stImp.picks = [];
+  }
+  const cls = classes.find(c=>c.id===stImp.clase);
+  const infos = cls.students.map(s=>studentInfo(cls,s));
+  const sinCar = infos.filter(i=>!i.carrera).length, sinMat = infos.filter(i=>!i.matricula).length;
+  const have = stImp.rows.length>0;
+  const nOk = stImp.auto.filter(a=>a.state==="ok").length, nDoubt = stImp.auto.filter(a=>a.state==="doubt").length, nNone = stImp.auto.filter(a=>a.state==="none").length;
+  const used = new Set(stImp.picks.filter(p=>p>=0));
+  const unused = stImp.rows.map((r,i)=>({r,i})).filter(x=>!used.has(x.i));
+  const nApply = stImp.picks.filter(p=>p>=0).length;
+
+  body.innerHTML = `
+    <p class="panel-intro">Completa la <b>matrícula</b> y la <b>carrera</b> de los estudiantes de una clase con un Excel de tres columnas: matrícula, nombre y carrera. El programa compara los nombres (sin importar el orden de nombres y apellidos ni los acentos) y asigna cada fila al estudiante que le corresponde. Antes de guardar puedes revisar y corregir.</p>
+    <div class="row">
+      <div class="field"><label for="impClase">Clase</label><select id="impClase">${optionsHtml(classes.map(c=>({value:c.id,label:c.name})), stImp.clase)}</select></div>
+      <button class="btn" type="button" id="impPick">${have ? "Cargar otro Excel" : "Cargar Excel"}</button>
+      <input type="file" id="impFile" accept=".xlsx,.xls,.csv">
+      <span class="legend-note" style="margin:0 0 8px;">${plural(cls.students.length,"estudiante","estudiantes")} · <span class="${sinCar?"warn-txt":""}">${sinCar} sin carrera</span> · <span class="${sinMat?"warn-txt":""}">${sinMat} sin matrícula</span></span>
+    </div>
+    ${!have ? `
+      <div class="imp-drop" id="impDrop">
+        <b>Suelta aquí el Excel</b> o pulsa "Cargar Excel".
+        <div class="legend-note" style="margin-top:8px;">Formato esperado (con o sin fila de encabezados):</div>
+        <table class="imp-sample"><thead><tr><th>MATRÍCULA</th><th>NOMBRE</th><th>CARRERA</th></tr></thead>
+          <tbody><tr><td>A00123427</td><td>ZOÉ MARIEL OZUNA NUÑEZ</td><td>DER</td></tr><tr><td>A00121360</td><td>LILLIAN MARIA VARGAS MATÍAS</td><td>GAS</td></tr></tbody></table>
+      </div>` : `
+      <div class="imp-summary">
+        <span class="muted">${esc(stImp.fileName)} · ${plural(stImp.rows.length,"fila","filas")}</span>
+        <span class="status on">${nOk} coinciden</span>
+        ${nDoubt ? `<span class="status off" style="background:var(--notice-bg);color:var(--ink);">${nDoubt} por revisar</span>` : ""}
+        ${nNone ? `<span class="status off">${nNone} sin coincidencia</span>` : ""}
+      </div>
+      <div class="table-wrap mt"><table id="impTable">
+        <thead><tr><th class="sticky">Estudiante en la clase</th><th>Estado</th><th>Fila del Excel que le corresponde</th><th>Matrícula</th><th>Carrera</th></tr></thead>
+        <tbody>${cls.students.map((st,j)=>{
+          const p = stImp.picks[j], a = stImp.auto[j], r = p>=0 ? stImp.rows[p] : null, info = infos[j];
+          const t = new Set(nameTokens(st.nombre));
+          const opts = stImp.rows.map((row,i)=>({ i, s:nameScore(t,row.toks).score })).sort((x,y)=>y.s-x.s);
+          const state = p<0 ? (a.state==="none" ? '<span class="status off">sin coincidencia</span>' : '<span class="muted">no se asigna</span>')
+                      : p!==a.pick ? '<span class="status on">elegido a mano</span>'
+                      : a.state==="doubt" ? '<span class="status off" style="background:var(--notice-bg);color:var(--ink);">revisar</span>'
+                      : '<span class="status on">coincide</span>';
+          const chg = (now, before)=> now && before && now!==before ? ` <span class="count" title="Valor actual">(antes ${esc(before)})</span>` : "";
+          return `<tr class="${a.state==="doubt"&&p===a.pick?"doubt":""}">
+            <td class="sticky"><b>${esc(st.nombre)}</b></td>
+            <td>${state}</td>
+            <td><select class="imp-sel" data-j="${j}">
+              <option value="-1"${p<0?" selected":""}>— No asignar —</option>
+              ${opts.map(o=>{ const row = stImp.rows[o.i]; return `<option value="${o.i}"${o.i===p?" selected":""}>${esc(row.nombre)}${row.carrera?" · "+esc(row.carrera):""}${row.matricula?" · "+esc(row.matricula):""}</option>`; }).join("")}
+            </select></td>
+            <td>${r ? esc(r.matricula||"—")+chg(r.matricula, info.matricula) : `<span class="muted">${esc(info.matricula||"—")}</span>`}</td>
+            <td>${r ? "<b>"+esc(r.carrera||"—")+"</b>"+chg(r.carrera, info.carrera) : `<span class="muted">${esc(info.carrera||"—")}</span>`}</td></tr>`; }).join("")}</tbody>
+      </table></div>
+      ${unused.length ? `<details class="mt"><summary class="legend-note" style="cursor:pointer;margin:0;">${plural(unused.length,"fila del Excel no se asignó","filas del Excel no se asignaron")} a ningún estudiante de esta clase</summary>
+        <ul class="legend-note" style="columns:2;margin:6px 0 0;">${unused.map(x=>`<li>${esc(x.r.nombre)}${x.r.carrera?" · "+esc(x.r.carrera):""}</li>`).join("")}</ul></details>` : ""}
+      <div class="row mt">
+        <button class="btn" type="button" id="impApply" ${nApply?"":"disabled"}>Guardar matrícula y carrera de ${plural(nApply,"estudiante","estudiantes")}</button>
+        <button class="btn ghost" type="button" id="impCancel">Cancelar</button>
+      </div>`}
+  `;
+  $("impClase").onchange = (e)=>{ stImp.clase = e.target.value; if(stImp.rows.length){ stImp.auto = autoMatch(classes.find(c=>c.id===stImp.clase), stImp.rows); stImp.picks = stImp.auto.map(a=>a.state==="none"?-1:a.pick); } drawAdminImport(); };
+  $("impPick").onclick = ()=>$("impFile").click();
+  $("impFile").onchange = (e)=>{ if(e.target.files[0]) loadImportFile(e.target.files[0]); e.target.value=""; };
+  const drop = $("impDrop");
+  if(drop){
+    drop.onclick = ()=>$("impFile").click();
+    ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add("drag"); }));
+    ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove("drag"); }));
+    drop.addEventListener("drop", e=>{ if(e.dataTransfer.files[0]) loadImportFile(e.dataTransfer.files[0]); });
+  }
+  if(have){
+    $("impTable").addEventListener("change", (e)=>{ const s = e.target.closest(".imp-sel"); if(!s) return; stImp.picks[+s.dataset.j] = +s.value; drawAdminImport(); });
+    $("impApply").onclick = applyImport;
+    $("impCancel").onclick = ()=>{ stImp.rows = []; stImp.picks = []; stImp.auto = []; drawAdminImport(); };
+  }
+}
+async function loadImportFile(file){
+  try{
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), {type:"array"});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:null, raw:true});
+    const list = parseStudentSheet(rows);
+    if(!list.length) return toast('No encontré estudiantes en "'+file.name+'". Debe tener columnas de matrícula, nombre y carrera.', "error");
+    const cls = classes.find(c=>c.id===stImp.clase);
+    stImp.fileName = file.name; stImp.rows = list;
+    stImp.auto = autoMatch(cls, list);
+    stImp.picks = stImp.auto.map(a=>a.state==="none" ? -1 : a.pick);
+    drawAdminImport();
+    const ok = stImp.auto.filter(a=>a.state==="ok").length;
+    toast(ok+" de "+cls.students.length+" estudiantes coinciden. Revisa y pulsa Guardar.");
+  }catch(err){ console.error(err); toast('No pude leer "'+file.name+'": '+err.message, "error"); }
+}
+function applyImport(){
+  const cls = classes.find(c=>c.id===stImp.clase); if(!cls) return;
+  let n = 0, cleared = 0;
+  cls.students.forEach((st,j)=>{
+    const p = stImp.picks[j]; if(p<0) return;
+    const r = stImp.rows[p];
+    if(r.matricula) st.matricula = r.matricula;
+    if(r.carrera){
+      st.carrera = r.carrera;
+      const k = nameKey(st.nombre), ov = overrides[k];
+      if(ov && ov.carrera){ delete ov.carrera; cleared++; if(!Object.keys(ov).length) delete overrides[k]; }   // el Excel reemplaza lo escrito a mano
+    }
+    n++;
+  });
+  stImp.rows = []; stImp.picks = []; stImp.auto = [];
+  adminTab = "estudiantes";
+  saveData(); render();
+  toast("Matrícula y carrera guardadas para "+plural(n,"estudiante","estudiantes")+" de "+cls.name+(cleared?" ("+cleared+" reemplazan una carrera escrita a mano)":"")+". Publica para que surta efecto.");
+}
+
+/* ----- Paso 4: publicar (directo a GitHub o a mano) ----- */
 const GH_KEY = "pp_github";
 function ghConfig(){ return store.get(GH_KEY, null); }
 function ghGuess(){
@@ -2599,6 +2787,8 @@ document.addEventListener("click", (e)=>{
   const eu = e.target.closest("[data-edit-user]");
   if(eu){ if(previewUser) endPreview(); editingUser = eu.dataset.editUser; createdInfo = null; goAdmin("usuarios");
     setTimeout(()=>{ const b = $("uFormBox"); if(b){ b.scrollIntoView({behavior:"smooth", block:"center"}); $("uPass").focus(); } }, 60); return; }
+  const im = e.target.closest("[data-import]");
+  if(im){ if(stImp.clase!==im.dataset.import){ stImp.rows = []; stImp.picks = []; stImp.auto = []; } stImp.clase = im.dataset.import; goAdmin("estudiantes"); return; }
   const as = e.target.closest("[data-assign]");
   if(as){ highlightClass = as.dataset.assign; goAdmin("asignar"); return; }
   const pn = e.target.closest("[data-publish-now]");
