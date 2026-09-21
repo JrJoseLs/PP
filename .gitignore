@@ -1,0 +1,4 @@
+# Datos de estudiantes: no publicar en GitHub Pages
+*.xlsx
+*.xls
+*.csv
