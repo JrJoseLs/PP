@@ -1279,7 +1279,7 @@ function stackedBarsSVG(items){
       const w = p.n/total*plotW;
       svg += svgEl("rect", {x:x.toFixed(1), y:y+5, width:Math.max(1,w-1).toFixed(1), height:rowH-10, fill:p.color, class:"bar"},
         it.label+" · nivel "+p.label.toLowerCase()+": "+plural(p.n,"estudiante","estudiantes")+" ("+Math.round(p.n/total*100)+"%)"+(it.filter?" · clic para ver":""));
-      if(w>22) svg += '<text x="'+(x+w/2).toFixed(1)+'" y="'+(y+rowH/2+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+INK+'" pointer-events="none">'+p.n+'</text>';
+      if(w>22) svg += '<text x="'+(x+w/2).toFixed(1)+'" y="'+(y+rowH/2+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#1E211B" pointer-events="none">'+p.n+'</text>';
       x += w;
     });
     svg += '<text x="'+(labelW+plotW+8)+'" y="'+(y+rowH/2+4)+'" font-size="10.5" fill="#9A9380">n='+it.parts.reduce((s,p)=>s+p.n,0)+'</text></g>';
@@ -2544,6 +2544,26 @@ function render(){
   dirty.add("usuarios");
   renderPanels();
 }
+
+/* ---------------- Tema claro / oscuro ---------------- */
+function currentTheme(){ return document.documentElement.getAttribute("data-theme")==="dark" ? "dark" : "light"; }
+function syncThemeButtons(){
+  const dark = currentTheme()==="dark";
+  document.querySelectorAll("[data-theme-toggle]").forEach(b=>{
+    b.title = dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+    b.setAttribute("aria-label", b.title);
+    b.setAttribute("aria-pressed", dark);
+  });
+}
+function setTheme(t, remember){
+  document.documentElement.setAttribute("data-theme", t);
+  if(remember) store.set("pp_theme", t);
+  syncThemeButtons();
+}
+document.addEventListener("click", (e)=>{ if(e.target.closest && e.target.closest("[data-theme-toggle]")) setTheme(currentTheme()==="dark" ? "light" : "dark", true); });
+// si la persona nunca eligió, se sigue el tema del sistema (también si cambia)
+if(window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e)=>{ if(!store.get("pp_theme", null)) setTheme(e.matches ? "dark" : "light", false); });
+syncThemeButtons();
 
 // acceso
 $("gateForm").addEventListener("submit", attemptUnlock);
