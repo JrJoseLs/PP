@@ -1717,7 +1717,7 @@ function drawComparar(){
 /* ---------- Perfil del estudiante (todos) ----------
    renderPanelPerfil dibuja los controles; syncPerfil actualiza la lista
    y el perfil. Flechas ← → del teclado: estudiante anterior/siguiente. */
-const stPer = { clase:null, key:null, carrera:"all", grupo:"all", q:"", view:"radar", vsClase:true, vsCarrera:true, vsGlobal:false };
+const stPer = { clase:null, key:null, carrera:"all", grupo:"all", q:"", view:"radar", vsClase:true, vsCarrera:false, vsGlobal:false };
 
 function openProfile(key){
   const r = rowByKey(key);
@@ -1775,7 +1775,7 @@ function stepPerfil(d){
 function syncPerfil(){
   const { cls, rowsCls, list, idx } = perfilContext();
   const sel = $("pfStudent");
-  sel.innerHTML = list.length ? optionsHtml(list.map(r=>({value:r.key, label:r.st.nombre+(r.st.empresa?"  —  "+r.st.empresa:"")})), stPer.key) : '<option value="">Ningún estudiante con ese filtro</option>';
+  sel.innerHTML = list.length ? optionsHtml(list.map(r=>({value:r.key, label:r.st.nombre})), stPer.key) : '<option value="">Ningún estudiante con ese filtro</option>';
   sel.disabled = !list.length;
   $("pfCount").textContent = list.length;
   $("pfPrev").disabled = idx<=0;
@@ -1783,32 +1783,74 @@ function syncPerfil(){
   $("pfPrint").disabled = idx<0;
   drawPerfil(cls, rowsCls, list[idx]);
 }
+/* Competencias que casi nadie activa (p.ej. "Fénix") no sirven como fortaleza o debilidad */
+function sparseMetrics(){
+  const rows = allRows();
+  return new Set(allMetrics().filter(m=>{ const v = rows.map(r=>metricValue(r.cls,r.st,m)).filter(x=>x!==null); return v.length && v.filter(x=>x===0).length/v.length>=0.7; }));
+}
+function levelChip(v){
+  const l = levelOf(v); if(!l) return "";
+  return `<span class="lvl lvl-${l.id}">nivel ${l.label.toLowerCase()}</span>`;
+}
+/* El mismo estudiante en otras clases (mismo nombre), en el orden en que se cargaron las clases */
+function studentHistory(row){
+  const k = nameKey(row.st.nombre);
+  return classes.map(c=>allRows().find(r=>r.cls===c && nameKey(r.st.nombre)===k)).filter(Boolean);
+}
 function drawPerfil(cls, rowsCls, row){
   const body = $("pfBody");
   if(!row){ body.innerHTML = '<div class="placeholder">Ningún estudiante coincide con el filtro.</div>'; return; }
   const rowsAll = allRows();
   const metrics = cls.metrics;
   const vals = row.st.valores;
-  const carRows = row.carrera!==SIN_CARRERA ? rowsAll.filter(r=>r.carrera===row.carrera) : [];
+  // compañeros de su carrera (sin contar al propio estudiante, que puede estar en varias clases)
+  const me = nameKey(row.st.nombre);
+  const carRows = row.carrera!==SIN_CARRERA ? rowsAll.filter(r=>r.carrera===row.carrera && nameKey(r.st.nombre)!==me) : [];
+  const carOk = carRows.length>=3;
   const clsAvg = classAverages(cls);
-  const carAvg = metrics.map(m=>avgOf(carRows,m));
-  const globAvg = metrics.map(m=>avgOf(rowsAll,m));
   const ranking = rowsCls.slice().sort((a,b)=>(b.indice??-1)-(a.indice??-1));
   const pos = ranking.findIndex(r=>r.key===row.key)+1;
-  const idxCls = avgOf(rowsCls, GENERAL), idxCar = carRows.length ? avgOf(carRows, GENERAL) : null;
+  const idxCls = avgOf(rowsCls, GENERAL), idxCar = carOk ? avgOf(carRows, GENERAL) : null;
+  const dCls = row.indice!==null && idxCls!==null ? row.indice-idxCls : null;
+  const sparse = sparseMetrics();
 
-  // Comparado con su clase: dónde destaca y dónde está por debajo (competencias positivas)
-  const items = metrics.map((m,i)=>({ m, v:vals[i], d: clsAvg[i]===null ? null : vals[i]-clsAvg[i] }));
+  // frente a su clase
+  const items = metrics.map((m,i)=>({ m, v:vals[i], d: clsAvg[i]===null ? null : vals[i]-clsAvg[i] })).filter(x=>!sparse.has(x.m));
   const positives = items.filter(x=>!isRisk(x.m) && x.d!==null).sort((a,b)=>b.d-a.d);
   const strengths = positives.filter(x=>x.d>0).slice(0,4);
   const weak = positives.filter(x=>x.d<0).slice(-4).reverse();
   const risks = items.filter(x=>isRisk(x.m) && x.v>=60).sort((a,b)=>b.v-a.v);
-  const li = (x, good)=>`<li><span title="${esc(metricHelp(x.m))}">${esc(x.m)}</span><span class="v">${fmt(x.v)}<span class="d ${x.d===null?"":(x.d>=0)===good?"pos":"neg"}">${x.d===null?"":fmtDiff(x.d)+" vs clase"}</span></span></li>`;
+  const history = studentHistory(row);
 
+  // ---- Qué observar (frases)
+  const obs = [];
+  if(row.indice!==null){
+    const lv = levelOf(row.indice);
+    obs.push(`Está en <b>nivel ${lv.label.toLowerCase()}</b> (${fmt(row.indice)}), ${dCls===null?"":Math.abs(dCls)<1 ? "en el promedio de su clase" : `<b>${fmt(Math.abs(dCls))} puntos ${dCls>0?"por encima":"por debajo"}</b> del promedio de su clase (${fmt(idxCls)})`}; puesto ${pos} de ${ranking.length}.`);
+  }
+  const bigWeak = weak.filter(x=>x.d<=-10).slice(0,3);
+  if(bigWeak.length) obs.push(`Lo más bajo frente a su clase: ${bigWeak.map(x=>`<b>${esc(x.m)}</b> (${fmtDiff(x.d)})`).join(", ")}.`);
+  const riskHigh = risks.filter(x=>x.d!==null && x.d>0).slice(0,2);
+  if(riskHigh.length) obs.push(`Riesgo alto${riskHigh.some(x=>x.d>=10)?" y por encima de su clase":""} en ${riskHigh.map(x=>`<b>${esc(x.m)}</b> (${fmt(x.v)})`).join(" y ")}.`);
+  if(strengths.length) obs.push(`Su mejor área frente a su clase: <b>${esc(strengths[0].m)}</b> (${fmtDiff(strengths[0].d)})${strengths[0].d>=10?"; es un punto de apoyo para trabajar lo demás":""}.`);
+  else obs.push("No supera a su clase en ninguna competencia.");
+  if(idxCar!==null && row.indice!==null) obs.push(`Frente a sus compañeros de carrera (${esc(row.carrera)}, ${carRows.length} estudiantes): ${fmtDiff(row.indice-idxCar)} puntos.`);
+  if(history.length>1){
+    const i = history.findIndex(r=>r.key===row.key);
+    const prev = i>0 ? history[i-1] : null, first = history[0], last = history[history.length-1];
+    if(prev && prev.indice!==null && row.indice!==null){
+      const d = row.indice-prev.indice;
+      obs.push(`Respecto a <b>${esc(prev.cls.name)}</b> ${Math.abs(d)<1?"se mantiene igual":d>0?`<b>mejoró ${fmt(d)} puntos</b>`:`<b>bajó ${fmt(-d)} puntos</b>`}.`);
+    } else if(first.indice!==null && last.indice!==null && last!==row){
+      obs.push(`Aparece en ${history.length} clases; en la última (${esc(last.cls.name)}) tiene ${fmt(last.indice)}.`);
+    }
+  }
+
+  // ---- gráfico: por defecto, estudiante vs su clase
   const series = [], legend = [];
-  if(stPer.vsGlobal){ series.push({name:"Promedio de todos", values:globAvg, color:GLOBALCOLOR, fillOpacity:0, strokeWidth:1.3, dash:"2,3", points:false}); legend.push({color:GLOBALCOLOR, label:"Promedio de todos", dash:true}); }
-  if(stPer.vsCarrera && carRows.length){ series.push({name:"Promedio de "+row.carrera, values:carAvg, color:CARCOLOR, fillOpacity:0, strokeWidth:1.5, dash:"6,3", points:false}); legend.push({color:CARCOLOR, label:"Promedio de "+row.carrera, dash:true}); }
-  if(stPer.vsClase){ series.push({name:"Promedio de "+cls.name, values:clsAvg, color:AVGCOLOR, fillOpacity:0.12, strokeWidth:1.4, dash:"4,3", points:false}); legend.push({color:AVGCOLOR, label:"Promedio de "+cls.name, dash:true}); }
+  if(stPer.vsGlobal){ series.push({name:"Promedio de todos", values:metrics.map(m=>avgOf(rowsAll,m)), color:GLOBALCOLOR, fillOpacity:0, strokeWidth:1.3, dash:"2,3", points:false}); legend.push({color:GLOBALCOLOR, label:"Promedio de todos", dash:true}); }
+  if(stPer.vsCarrera && carOk){ series.push({name:"Promedio de "+row.carrera, values:metrics.map(m=>avgOf(carRows,m)), color:CARCOLOR, fillOpacity:0, strokeWidth:1.5, dash:"6,3", points:false}); legend.push({color:CARCOLOR, label:"Promedio de "+row.carrera, dash:true}); }
+  if(stPer.vsClase){ series.push({name:"Promedio de su clase", values:clsAvg, color:AVGCOLOR, fillOpacity:0.12, strokeWidth:1.4, dash:"4,3", points:false}); legend.push({color:AVGCOLOR, label:"Promedio de su clase", dash:true}); }
   series.push({name:row.st.nombre, values:vals, color:cls.color, fillOpacity:0.28, strokeWidth:2.4});
   legend.push({color:cls.color, label:row.st.nombre});
   const labels = metrics.map(mLabel);
@@ -1816,29 +1858,49 @@ function drawPerfil(cls, rowsCls, row){
   const chart = isRadar
     ? radarChartSVG(labels, series, {label:"Perfil de "+row.st.nombre})
     : barChartHorizontalSVG(labels, series.slice().reverse(), {label:"Perfil de "+row.st.nombre});
+  const li = (x, good)=>`<li><span title="${esc(metricHelp(x.m))}">${esc(x.m)}</span><span class="v">${fmt(x.v)}<span class="d ${x.d===null?"":(x.d>=0)===good?"pos":"neg"}">${x.d===null?"":fmtDiff(x.d)+" vs clase"}</span></span></li>`;
 
   body.innerHTML = `
-    <h2 class="print-only">${esc(row.st.nombre)} · ${esc(cls.name)}</h2>
-    <div class="stat-row">
-      <div class="stat" title="Promedio de sus competencias positivas"><div class="label">Índice del estudiante</div><div class="val" style="color:${cls.color}">${fmt(row.indice)}</div><div class="sub">Puesto ${pos} de ${ranking.length} en la clase</div></div>
-      <div class="stat"><div class="label">Índice de la clase</div><div class="val" style="color:${AVGCOLOR}">${fmt(idxCls)}</div><div class="sub">${esc(cls.name)}</div></div>
-      <div class="stat"><div class="label">Índice de su carrera</div><div class="val" style="color:${CARCOLOR}">${fmt(idxCar)}</div><div class="sub">${carRows.length ? plural(carRows.length,"estudiante","estudiantes")+(classes.length>1?" en tus clases":"") : "Carrera sin asignar"}</div></div>
-      <div class="stat"><div class="label">Datos</div><div class="val" style="font-size:16px;padding-top:3px;">${esc(row.carrera)}</div><div class="sub">Grupo ${esc(row.grupo)}${row.info.matricula?" · "+esc(row.info.matricula):""}${row.st.empresa?" · "+esc(row.st.empresa):""}</div></div>
+    <div class="pf-head">
+      <h2>${esc(row.st.nombre)}</h2>
+      <div class="pf-sub">${esc(row.carrera)} · ${row.grupo===SIN_GRUPO?"sin grupo":"grupo "+esc(row.grupo)} · ${esc(cls.name)}</div>
     </div>
-    <div class="box">
+    <div class="pf-result">
+      <span class="pf-idx" style="color:${cls.color}" title="${esc(metricHelp(GENERAL))}">${fmt(row.indice)}</span>
+      ${levelChip(row.indice)}
+      <span>puesto <b>${pos}</b> de ${ranking.length}</span>
+      ${dCls===null ? "" : `<span class="${dCls>=0?"pos":"neg"}"><b>${fmt(Math.abs(dCls))}</b> pts ${dCls>=0?"sobre":"bajo"} su clase (${fmt(idxCls)})</span>`}
+    </div>
+
+    <div class="box observe">
+      <h3>Qué observar</h3>
+      <ul>${obs.map(t=>`<li>${t}</li>`).join("")}</ul>
+    </div>
+
+    ${history.length>1 ? `
+    <div class="box mt history">
+      <h3>Su recorrido en ${classes.length>1 && !isAdmin() ? "tus " : ""}clases <span class="count">(en el orden en que se cargaron)</span></h3>
+      <div class="hist-row">${history.map((h,i)=>{
+        const d = i>0 && h.indice!==null && history[i-1].indice!==null ? h.indice-history[i-1].indice : null;
+        return `${i>0?`<span class="hist-arrow ${d===null?"":d>=0?"pos":"neg"}">${d===null?"→":(d>=0?"▲ ":"▼ ")+fmt(Math.abs(d))}</span>`:""}
+          <button type="button" class="hist-item ${h.key===row.key?"on":""}" data-profile="${esc(h.key)}" style="--swatch:${h.cls.color}" title="Ver su perfil en esta clase">
+            <small>${esc(h.cls.name)}</small><b>${fmt(h.indice)}</b>${levelChip(h.indice)}</button>`; }).join("")}</div>
+    </div>` : ""}
+
+    <div class="box mt">
       <div class="checks no-print" id="pfVs">
         <span class="muted">Comparar con:</span>
         <label><input type="checkbox" data-k="vsClase" ${stPer.vsClase?"checked":""}> su clase</label>
-        <label><input type="checkbox" data-k="vsCarrera" ${stPer.vsCarrera?"checked":""} ${carRows.length?"":"disabled"}> su carrera</label>
+        <label><input type="checkbox" data-k="vsCarrera" ${stPer.vsCarrera?"checked":""} ${carOk?"":"disabled title=\"Hacen falta al menos 3 compañeros de su carrera\""}> su carrera</label>
         <label><input type="checkbox" data-k="vsGlobal" ${stPer.vsGlobal?"checked":""}> todos los estudiantes</label>
       </div>
       ${chart}${isRadar ? "" : legendRow(legend)}
-      <div class="legend-note">${METRIC_NOTE}</div>
+      ${isRadar ? "" : `<div class="legend-note">${METRIC_NOTE}</div>`}
     </div>
     <div class="two-col">
       <div class="box"><h3>Por encima de su clase</h3>${strengths.length ? `<ul class="insight-list">${strengths.map(x=>li(x,true)).join("")}</ul>` : '<p class="legend-note">Ninguna competencia por encima del promedio de la clase.</p>'}</div>
       <div class="box"><h3>Por debajo de su clase</h3>${weak.length ? `<ul class="insight-list">${weak.map(x=>li(x,true)).join("")}</ul>` : '<p class="legend-note">Ninguna competencia por debajo del promedio de la clase.</p>'}
-        ${risks.length ? `<h3 class="sub-h">Alertas de riesgo (↓ valor alto)</h3><ul class="insight-list">${risks.map(x=>li(x,false)).join("")}</ul>` : ""}
+        ${risks.length ? `<h3 class="sub-h">Riesgos (↓ valor alto)</h3><ul class="insight-list">${risks.map(x=>li(x,false)).join("")}</ul>` : ""}
       </div>
     </div>`;
   $("pfVs").querySelectorAll("input").forEach(cb=>{ cb.onchange = ()=>{ stPer[cb.dataset.k] = cb.checked; syncPerfil(); }; });
