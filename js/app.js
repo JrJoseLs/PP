@@ -321,7 +321,7 @@ function logout(){
 
 /* ---------------- Pestañas por rol ----------------
    maestro : Resumen, Por carrera, Comparar estudiantes, Perfil, Tabla   (solo sus clases, gráficos de barras)
-   decano  : lo mismo + gráfico araña y comparación entre carreras        (solo sus clases)
+   decano  : lo mismo + gráfico araña y comparación general (clases, carreras, grupos, estudiantes)
    admin   : todo, todas las clases + Administración                 */
 const TAB_DEFS = [
   { id:"resumen",  label:"Resumen",              roles:["admin","decano","maestro"] },
@@ -946,42 +946,164 @@ function svgEl(tag, attrs, title){
 function svgWrap(W, H, inner, label){
   return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="'+esc(label||"Gráfico")+'" style="display:block;max-width:100%;height:auto;">'+inner+'</svg>';
 }
+/* ---------- Gráfico araña interactivo ----------
+   - "Más afuera = mejor": invierte los ejes de riesgo (↓) para que una figura más
+     grande signifique siempre mejor rendimiento. Los valores reales se ven en el detalle.
+   - Franjas de nivel (bajo < 34, alto ≥ 66).
+   - Pasar el cursor o tocar una competencia: tarjeta con el valor de cada serie.
+   - Leyenda: clic para ocultar/mostrar una serie; pasar el cursor para resaltarla.   */
+let radarInvert = store.get("pp_radar_invert", true);
+const radarReg = new Map();
+let radarSeq = 0;
+
+function wrapLabel(t, max){
+  const words = String(t).split(" "); const lines = [""];
+  words.forEach(w=>{ const c = (lines[lines.length-1] ? lines[lines.length-1]+" " : "")+w;
+    if(c.length>max && lines[lines.length-1]!=="") lines.push(w); else lines[lines.length-1] = c; });
+  return lines.slice(0,2);
+}
 function radarChartSVG(labels, series, opts){
   opts = opts||{};
-  const W = opts.width||700, H = opts.height||620;
-  const cx = W/2, cy = H/2, R = Math.min(W,H)/2 - 95;
+  const W = opts.width||720, H = opts.height||660;
+  const cx = W/2, cy = H/2+4, R = Math.min(W,H)/2 - 112;
   const N = labels.length, max = 100;
+  const risk = labels.map(l=>/↓$/.test(l));
+  const inv = radarInvert;
+  const shown = (s,i)=> (inv && risk[i] && s.values[i]!==null && s.values[i]!==undefined) ? 100 - s.values[i] : s.values[i];
   const angle = (i)=> -Math.PI/2 + i*(2*Math.PI/N);
-  const pt = (i,val)=>{ const r = Math.max(0,Math.min(val||0,max))/max*R; return [cx+r*Math.cos(angle(i)), cy+r*Math.sin(angle(i))]; };
+  const P = (i,val,rr)=>{ const r = (rr!==undefined ? rr : Math.max(0,Math.min(val||0,max))/max*R); return [cx+r*Math.cos(angle(i)), cy+r*Math.sin(angle(i))]; };
+  const ring = (f)=> labels.map((_,i)=>P(i,0,R*f).map(n=>n.toFixed(1)).join(",")).join(" ");
+  const id = "r"+(++radarSeq);
+  if(radarReg.size>40) radarReg.delete(radarReg.keys().next().value);
+  radarReg.set(id, { labels, series, risk });
+
   let svg = "";
+  // zonas de nivel (solo tienen sentido cuando todos los ejes van en la misma dirección)
+  if(inv){
+    svg += svgEl("polygon", {points:ring(1), fill:"#E2EDE4", "fill-opacity":0.75});
+    svg += svgEl("polygon", {points:ring(0.66), fill:"#FFFEF9"});
+    svg += svgEl("polygon", {points:ring(0.34), fill:"#F6E1D9", "fill-opacity":0.7});
+  }
+  // sector de las competencias de riesgo
+  const rIdx = risk.map((r,i)=>r?i:-1).filter(i=>i>=0);
+  if(rIdx.length){
+    const half = Math.PI/N, a0 = angle(rIdx[0])-half, a1 = angle(rIdx[rIdx.length-1])+half, RR = R+6;
+    svg += '<path d="M'+cx+','+cy+' L'+(cx+RR*Math.cos(a0)).toFixed(1)+','+(cy+RR*Math.sin(a0)).toFixed(1)+' A'+RR+','+RR+' 0 '+((a1-a0)>Math.PI?1:0)+' 1 '+(cx+RR*Math.cos(a1)).toFixed(1)+','+(cy+RR*Math.sin(a1)).toFixed(1)+' Z" fill="#8A3A2A" fill-opacity="0.045"/>';
+  }
   [0.25,0.5,0.75,1].forEach(f=>{
-    svg += svgEl("polygon", {points: labels.map((_,i)=>(cx+R*f*Math.cos(angle(i))).toFixed(1)+","+(cy+R*f*Math.sin(angle(i))).toFixed(1)).join(" "), fill:"none", stroke:GRIDCOLOR, "stroke-width":1});
+    svg += svgEl("polygon", {points:ring(f), fill:"none", stroke:GRIDCOLOR, "stroke-width":1});
     svg += '<text x="'+(cx+3)+'" y="'+(cy-R*f+10).toFixed(1)+'" font-size="8.5" fill="#9A9380">'+(f*100)+'</text>';
   });
-  labels.forEach((_,i)=>{ const [x,y] = pt(i,max); svg += svgEl("line", {x1:cx,y1:cy,x2:x.toFixed(1),y2:y.toFixed(1), stroke:GRIDCOLOR, "stroke-width":1}); });
-  series.forEach(s=>{
-    svg += svgEl("polygon", {points: labels.map((_,i)=>pt(i,s.values[i]).map(n=>n.toFixed(1)).join(",")).join(" "),
-      fill:s.color, "fill-opacity":s.fillOpacity!==undefined?s.fillOpacity:0.2, stroke:s.color, "stroke-width":s.strokeWidth||2, "stroke-dasharray":s.dash||"", "pointer-events":"none"});
+  labels.forEach((_,i)=>{ const [x,y] = P(i,max); svg += svgEl("line", {x1:cx,y1:cy,x2:x.toFixed(1),y2:y.toFixed(1), stroke:GRIDCOLOR, "stroke-width":1, class:"ax", "data-ax":i}); });
+  // series
+  series.forEach((s,k)=>{
+    svg += '<g class="rs" data-s="'+k+'">';
+    svg += svgEl("polygon", {points: labels.map((_,i)=>P(i,shown(s,i)).map(n=>n.toFixed(1)).join(",")).join(" "),
+      fill:s.color, "fill-opacity":s.fillOpacity!==undefined?s.fillOpacity:0.2, stroke:s.color, "stroke-width":s.strokeWidth||2, "stroke-dasharray":s.dash||"", "stroke-linejoin":"round"});
+    if(s.points!==false) labels.forEach((_,i)=>{ const [x,y] = P(i,shown(s,i)); svg += svgEl("circle", {cx:x.toFixed(1), cy:y.toFixed(1), r:2.8, fill:s.color, stroke:"#fff", "stroke-width":0.8, class:"pt", "data-ax":i}); });
+    svg += '</g>';
   });
-  // puntos (con aviso) al final, para que queden encima
-  series.forEach(s=>{
-    labels.forEach((lab,i)=>{
-      const [x,y] = pt(i,s.values[i]);
-      const tip = (s.name ? s.name+" · " : "")+lab+": "+fmt(s.values[i]);
-      svg += s.points===false
-        ? svgEl("circle", {cx:x.toFixed(1), cy:y.toFixed(1), r:5, fill:"transparent"}, tip)
-        : svgEl("circle", {cx:x.toFixed(1), cy:y.toFixed(1), r:3.2, fill:s.color, stroke:"#fff", "stroke-width":0.8, class:"pt"}, tip);
-    });
-  });
+  // etiquetas en 1–2 líneas
   labels.forEach((lab,i)=>{
-    const a = angle(i), lx = cx+(R+16)*Math.cos(a), ly = cy+(R+16)*Math.sin(a);
+    const a = angle(i), lx = cx+(R+18)*Math.cos(a), ly = cy+(R+18)*Math.sin(a);
     const anchor = Math.cos(a)>0.15 ? "start" : Math.cos(a)<-0.15 ? "end" : "middle";
-    const dy = Math.sin(a)>0.5 ? 9 : (Math.sin(a)<-0.5 ? -3 : 3);
-    const risk = /↓$/.test(lab);
-    svg += '<text x="'+lx.toFixed(1)+'" y="'+(ly+dy).toFixed(1)+'" text-anchor="'+anchor+'" font-size="10" fill="'+(risk?"#8A3A2A":INK)+'">'+esc(lab)+'</text>';
+    const lines = wrapLabel(lab, 17);
+    const dy = Math.sin(a)>0.5 ? 10 : (Math.sin(a)<-0.5 ? -4-(lines.length-1)*11 : 4-(lines.length-1)*5.5);
+    svg += '<text class="axl" data-ax="'+i+'" x="'+lx.toFixed(1)+'" y="'+(ly+dy).toFixed(1)+'" text-anchor="'+anchor+'" font-size="10.5" fill="'+(risk[i]?"#8A3A2A":INK)+'">'+
+      lines.map((ln,k)=>'<tspan x="'+lx.toFixed(1)+'" dy="'+(k?11:0)+'">'+esc(ln)+'</tspan>').join("")+'</text>';
   });
-  return svgWrap(W, H, svg, opts.label);
+  // zonas sensibles por eje (encima de todo): cuña desde el centro hasta la etiqueta
+  labels.forEach((_,i)=>{
+    const half = Math.PI/N, a0 = angle(i)-half, a1 = angle(i)+half, RR = R+70;
+    svg += '<path class="axis-hit" data-axis="'+i+'" d="M'+cx+','+cy+' L'+(cx+RR*Math.cos(a0)).toFixed(1)+','+(cy+RR*Math.sin(a0)).toFixed(1)+' A'+RR+','+RR+' 0 0 1 '+(cx+RR*Math.cos(a1)).toFixed(1)+','+(cy+RR*Math.sin(a1)).toFixed(1)+' Z" fill="transparent"/>';
+  });
+
+  const legend = series.map((s,k)=>`<button type="button" class="rl" data-rs="${k}" title="Clic para ocultar o mostrar">
+      <span class="legend-swatch${s.dash?" dash":""}" style="background:${s.color};color:${s.color}"></span>${esc(s.name||"Serie "+(k+1))}</button>`).join("");
+  return `<div class="radar-wrap" data-rid="${id}">
+    <div class="radar-tools">
+      <label title="Invierte las competencias de riesgo (↓) para que en todos los ejes estar más afuera sea mejor"><input type="checkbox" data-radar-invert ${inv?"checked":""}> Más afuera = mejor</label>
+      <span class="muted">Pasa el cursor o toca una competencia para ver los valores.</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(opts.label||"Gráfico araña")}" style="display:block;max-width:100%;height:auto;">${svg}</svg>
+    <div class="radar-legend">${legend}</div>
+    <div class="radar-note legend-note">${inv
+      ? "Las competencias de riesgo (↓, en rojo) están invertidas: estar más afuera significa menos riesgo. Zona roja = nivel bajo · zona verde = nivel alto."
+      : "Escala original: en las competencias de riesgo (↓, en rojo) un valor más alto es peor."}</div>
+    <div class="radar-tip" hidden></div>
+  </div>`;
 }
+function radarAxisTip(wrap, i, ev){
+  const reg = radarReg.get(wrap.dataset.rid); if(!reg) return;
+  const tip = wrap.querySelector(".radar-tip");
+  if(wrap.dataset.ax !== String(i)){
+    wrap.dataset.ax = i;
+    wrap.querySelectorAll(".ax.on, .axl.on, .pt.on").forEach(e=>e.classList.remove("on"));
+    wrap.querySelectorAll(`[data-ax="${i}"]`).forEach(e=>e.classList.add("on"));
+    const risk = reg.risk[i], label = reg.labels[i].replace(/ ↓$/,"");
+    const hidden = new Set([...wrap.querySelectorAll(".rl.off")].map(b=>+b.dataset.rs));
+    const vals = reg.series.map((s,k)=>({ s, k, v:s.values[i] })).filter(x=>!hidden.has(x.k) && x.v!==null && x.v!==undefined)
+      .sort((a,b)=> risk ? a.v-b.v : b.v-a.v);
+    const lvl = (v)=>{ const g = risk ? 100-v : v; return g>=66 ? '<span class="status on">alto</span>' : g<34 ? '<span class="status off">bajo</span>' : ""; };
+    tip.innerHTML = `<div class="rt-h">${esc(label)}${risk?' <span class="rt-r">↓ menos es mejor</span>':""}</div>
+      ${vals.map((x,j)=>`<div class="rt-row${j===0&&vals.length>1?" best":""}"><span class="legend-swatch" style="background:${x.s.color}"></span><span class="rt-n">${esc(x.s.name||"")}</span><b>${fmt(x.v)}</b>${lvl(x.v)}</div>`).join("") || '<div class="muted">Sin datos</div>'}
+      ${vals.length>1 ? `<div class="rt-f">Diferencia entre el mejor y el peor: <b>${fmt(Math.abs(vals[0].v-vals[vals.length-1].v))}</b></div>` : ""}`;
+  }
+  tip.hidden = false;
+  const r = wrap.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = ev.clientX - r.left + 16, y = ev.clientY - r.top + 12;
+  if(x + tw > r.width - 4) x = ev.clientX - r.left - tw - 16;
+  if(y + th > r.height - 4) y = r.height - th - 4;
+  tip.style.left = Math.max(4,x)+"px"; tip.style.top = Math.max(4,y)+"px";
+}
+function radarHide(wrap){
+  const tip = wrap.querySelector(".radar-tip"); if(tip) tip.hidden = true;
+  delete wrap.dataset.ax;
+  wrap.querySelectorAll(".ax.on, .axl.on, .pt.on").forEach(e=>e.classList.remove("on"));
+}
+document.addEventListener("pointermove", (e)=>{
+  if(e.pointerType!=="mouse" && e.pointerType!=="pen") return;
+  const hit = e.target.closest && e.target.closest(".axis-hit");
+  if(hit) radarAxisTip(hit.closest(".radar-wrap"), +hit.dataset.axis, e);
+  else { const w = e.target.closest && e.target.closest(".radar-wrap"); if(w && w.dataset.ax!==undefined && !e.target.closest(".radar-tip")) radarHide(w); }
+});
+document.addEventListener("pointerdown", (e)=>{           // en pantallas táctiles: tocar un eje muestra el detalle
+  if(e.pointerType==="mouse") return;
+  const hit = e.target.closest && e.target.closest(".axis-hit");
+  if(hit) radarAxisTip(hit.closest(".radar-wrap"), +hit.dataset.axis, e);
+  else document.querySelectorAll(".radar-wrap[data-ax]").forEach(radarHide);   // tocar fuera lo cierra
+});
+document.addEventListener("pointerout", (e)=>{
+  if(e.pointerType!=="mouse") return;                      // al levantar el dedo el detalle se queda visible
+  const w = e.target.closest && e.target.closest(".radar-wrap");
+  if(w && !w.contains(e.relatedTarget)) radarHide(w);
+});
+document.addEventListener("click", (e)=>{
+  const b = e.target.closest && e.target.closest(".radar-wrap .rl");
+  if(!b) return;
+  const w = b.closest(".radar-wrap"), k = b.dataset.rs;
+  const visibles = w.querySelectorAll(".rl:not(.off)").length;
+  if(!b.classList.contains("off") && visibles<=1) return toast("Debe quedar al menos una serie visible.");
+  b.classList.toggle("off");
+  w.querySelector(`g.rs[data-s="${k}"]`).classList.toggle("off", b.classList.contains("off"));
+  radarHide(w);
+});
+document.addEventListener("mouseover", (e)=>{
+  const b = e.target.closest && e.target.closest(".radar-wrap .rl");
+  const w = e.target.closest && e.target.closest(".radar-wrap");
+  if(!w) return;
+  w.querySelectorAll("g.rs.focus").forEach(g=>g.classList.remove("focus"));
+  if(b && !b.classList.contains("off")){ w.classList.add("focusing"); w.querySelector(`g.rs[data-s="${b.dataset.rs}"]`).classList.add("focus"); }
+  else w.classList.remove("focusing");
+});
+document.addEventListener("change", (e)=>{
+  if(!e.target.matches || !e.target.matches("[data-radar-invert]")) return;
+  radarInvert = e.target.checked;
+  store.set("pp_radar_invert", radarInvert);
+  if(activeTab && PANEL_RENDER[activeTab]){ PANEL_RENDER[activeTab](); }
+  DATA_PANELS.forEach(id=>{ if(id!==activeTab) dirty.add(id); });
+});
+
 function barChartHorizontalSVG(labels, series, opts){
   opts = opts||{};
   const max = 100, labelW = opts.labelWidth||180, plotW = opts.plotWidth||420;
@@ -1263,8 +1385,7 @@ function renderPanelResumen(){
 }
 
 /* ---------- Por carrera (decano / admin) ---------- */
-const stCar = { metric:GENERAL, clase:"all", grupo:"all", sel:[], touched:false, view:"radar", vsAll:true };
-const CAR_MAX = 6;
+const stCar = { metric:GENERAL, clase:"all", grupo:"all" };
 
 function renderPanelCarreras(){
   const panel = $("panel-carreras");
@@ -1285,7 +1406,7 @@ function renderPanelCarreras(){
   const sin = stats.find(s=>s.carrera===SIN_CARRERA);
 
   panel.innerHTML = `
-    <p class="panel-intro">Promedio de cada carrera, ordenado de mayor a menor. Puedes limitarlo a una clase o a un grupo. Haz clic en una carrera para ver sus estudiantes.</p>
+    <p class="panel-intro">Promedio de cada carrera, ordenado de mayor a menor. Puedes limitarlo a una clase o a un grupo. Haz clic en una carrera para ver sus estudiantes.${canRadar() ? ' Más abajo, la <a href="#genTitle">comparación general</a>.' : ""}</p>
     <div class="row">
       <div class="field"><label for="carMetric">Competencia</label><select id="carMetric">${optionsHtml(opts, stCar.metric)}</select></div>
       ${filterFieldsHtml("car", stCar, rowsAll, ["clase","grupo"])}
@@ -1294,24 +1415,9 @@ function renderPanelCarreras(){
     <div class="box" id="carChart"></div>
     <div class="legend-note">${METRIC_NOTE}</div>
     ${canRadar() ? `
-    <h3 class="section-title mt">Comparar carreras</h3>
-    <div class="legend-note" style="margin:-6px 0 10px;">Elige hasta ${CAR_MAX} carreras para ver todas sus competencias lado a lado (promedio de sus estudiantes${stCar.clase!=="all"||stCar.grupo!=="all"?", con los filtros de arriba":""}).</div>
-    <div class="box">
-      <div class="car-pick" id="carPick"></div>
-      <div class="row" style="margin:12px 0 0;align-items:center;">
-        <div class="field"><label>Vista</label>${segHtml("carView",[{value:"radar",label:"Araña"},{value:"barras",label:"Barras"}], stCar.view)}</div>
-        <label class="checks" style="padding-top:18px;"><input type="checkbox" id="carVsAll" ${stCar.vsAll?"checked":""}> Mostrar el promedio de todos</label>
-      </div>
-      <div id="carCmp"></div>
-    </div>` : ""}
-    <h3 class="section-title mt">Carrera por clase</h3>
-    <div class="legend-note" style="margin:-6px 0 10px;">Promedio de <b>${esc(mLabel(stCar.metric))}</b> de cada carrera en cada clase. Entre paréntesis, la cantidad de estudiantes.</div>
-    <div class="table-wrap" id="carTable"></div>
-    <details class="box mt ${isAdmin()?"":"hidden"}" id="carNames">
-      <summary>Nombres de las carreras</summary>
-      <div class="legend-note" style="margin:0 0 12px;">Escribe el nombre completo de cada código. Si das el mismo nombre a dos códigos (por ejemplo ISO e ISOR), se cuentan como una sola carrera. Se guarda en este navegador y viaja en el respaldo.</div>
-      <div class="table-wrap" style="max-height:360px;" id="carNamesTable"></div>
-    </details>
+    <h3 class="section-title mt" id="genTitle">Comparación general</h3>
+    <p class="panel-intro" style="margin:-6px 0 12px;">Compara lo que necesites para decidir: clases entre sí, carreras, una carrera en distintas clases, grupos o estudiantes concretos. Arma cada elemento con los filtros y pulsa "Agregar", o usa un atajo. Esta sección no depende de los filtros de arriba.</p>
+    <div class="box" id="genBox"></div>` : ""}
   `;
   $("carMetric").onchange = (e)=>{ stCar.metric = e.target.value; renderPanelCarreras(); };
   wireFilters("car", stCar, renderPanelCarreras);
@@ -1321,76 +1427,214 @@ function renderPanelCarreras(){
     ? rankBarsSVG(real.map(s=>({label:s.carrera, value:s.avg, n:s.n, color:carreraColor(s.carrera), filter:"carrera:"+s.carrera})), {label:"Promedio por carrera"})
     : '<div class="placeholder">No hay estudiantes con ese filtro.</div>';
 
-  if(canRadar()){
-    const reales = stats.filter(s=>s.carrera!==SIN_CARRERA && s.n);
-    stCar.sel = stCar.sel.filter(k=>reales.some(s=>s.carrera===k));
-    if(!stCar.touched && !stCar.sel.length) stCar.sel = reales.slice().sort((a,b)=>b.n-a.n).slice(0,3).map(s=>s.carrera);
-    $("carPick").innerHTML = reales.length ? reales.map(s=>`<button type="button" class="pick ${stCar.sel.includes(s.carrera)?"on":""}" data-car="${esc(s.carrera)}" style="--swatch:${carreraColor(s.carrera)}" aria-pressed="${stCar.sel.includes(s.carrera)}">${esc(s.carrera)} <span class="count">${s.n}</span></button>`).join("")
-      : '<span class="legend-note">No hay estudiantes con carrera asignada.</span>';
-    $("carPick").onclick = (e)=>{
-      const b = e.target.closest("button[data-car]"); if(!b) return;
-      const k = b.dataset.car; stCar.touched = true;
-      if(stCar.sel.includes(k)) stCar.sel = stCar.sel.filter(x=>x!==k);
-      else if(stCar.sel.length>=CAR_MAX) return toast("Puedes comparar hasta "+CAR_MAX+" carreras a la vez.", "error");
-      else stCar.sel.push(k);
-      b.classList.toggle("on"); b.setAttribute("aria-pressed", stCar.sel.includes(k));
-      drawCarCompare(rows);
-    };
-    wireSeg("carView", v=>{ stCar.view = v; setSeg("carView", v); drawCarCompare(rows); });
-    $("carVsAll").onchange = (e)=>{ stCar.vsAll = e.target.checked; drawCarCompare(rows); };
-    drawCarCompare(rows);
-  }
+  if(canRadar()) renderGeneral();
 
-  // matriz carrera × clase
-  const cls = stCar.clase==="all" ? classes : classes.filter(c=>c.id===stCar.clase);
-  $("carTable").innerHTML = `<table><thead><tr><th>Carrera</th><th class="num">Estudiantes</th><th class="num">${stCar.clase==="all"?"Todas las clases":"Promedio"}</th>
-      ${stCar.clase==="all" ? cls.map(c=>`<th class="num">${esc(c.name)}</th>`).join("") : ""}</tr></thead>
-    <tbody>${stats.map(s=>`<tr>
-      <td><span class="legend-swatch" style="background:${carreraColor(s.carrera)}"></span> <b>${esc(s.carrera)}</b></td>
-      <td class="num">${s.n}</td>
-      <td class="num ${heatClass(stCar.metric, s.avg)}"><b>${fmt(s.avg)}</b></td>
-      ${stCar.clase==="all" ? cls.map(c=>{ const rr = s.rows.filter(r=>r.cls===c);
-        return rr.length ? `<td class="num">${fmt(avgOf(rr, stCar.metric))} <span class="count">(${rr.length})</span></td>` : '<td class="num muted">—</td>'; }).join("") : ""}
-    </tr>`).join("")}</tbody></table>`;
-
-  // editor de nombres
-  const codes = distinct(roster.map(r=>r.carrera).concat(rowsAll.map(r=>r.info.carrera)).filter(Boolean));
-  $("carNamesTable").innerHTML = codes.length ? `<table><thead><tr><th>Código</th><th>Nombre de la carrera</th><th class="num">En informes</th></tr></thead><tbody>${
-    codes.map(code=>`<tr><td><b>${esc(code)}</b></td>
-      <td><input class="cell-input" style="width:260px" data-code="${esc(code)}" value="${esc(carreraNames[code]||"")}" placeholder="${esc(code)}"></td>
-      <td class="num">${rowsAll.filter(r=>r.info.carrera===code).length}</td></tr>`).join("")
-  }</tbody></table>` : '<div class="placeholder">Todavía no hay carreras.</div>';
-  $("carNamesTable").querySelectorAll("input[data-code]").forEach(inp=>{
-    inp.onchange = ()=>{
-      const v = inp.value.trim();
-      if(v) carreraNames[inp.dataset.code] = v; else delete carreraNames[inp.dataset.code];
-      saveData(); render();
-      $("carNames").open = true;
-    };
-  });
 }
 
-function drawCarCompare(rows){
-  const box = $("carCmp"); if(!box) return;
-  if(!stCar.sel.length){ box.innerHTML = '<div class="placeholder" style="margin-top:12px;">Elige una o más carreras arriba.</div>'; return; }
+/* ---------- Comparación general (decano / admin) ----------
+   Cada elemento comparado es un "grupo" definido por filtros:
+     clase + carrera + grupo  (cualquiera puede ser "todas")   o   un estudiante.
+   Así se comparan clases, carreras, la misma carrera en distintas clases,
+   grupos y estudiantes con la misma herramienta.
+   Para decidir no basta el promedio: se muestra también la dispersión
+   (desviación), el % en nivel bajo/alto, dónde difieren más
+   y se advierte cuando la muestra es muy pequeña para sacar conclusiones. */
+const GEN_MAX = 8;
+const SMALL_N = 5;
+const stGen = { items:[], init:false, view:"radar", b:{ clase:"all", carrera:"all", grupo:"all", key:"" } };
+let genSeq = 0;
+
+function genRows(it){
+  if(it.key){ const r = rowByKey(it.key); return r ? [r] : []; }
+  return filterRows(allRows(), it);
+}
+function genLabel(it){
+  if(it.key){ const r = rowByKey(it.key); return r ? r.st.nombre : "(estudiante)"; }
+  const parts = [];
+  if(it.carrera!=="all") parts.push(it.carrera);
+  if(it.clase!=="all"){ const c = classes.find(x=>x.id===it.clase); parts.push(c ? c.name : "(clase)"); }
+  if(it.grupo!=="all") parts.push("grupo "+it.grupo);
+  return parts.length ? parts.join(" · ") : "Todos los estudiantes";
+}
+function genKind(it){ return it.key ? "Estudiante" : (it.carrera!=="all" && it.clase!=="all") ? "Carrera en clase" : it.carrera!=="all" ? "Carrera" : it.clase!=="all" ? "Clase" : it.grupo!=="all" ? "Grupo" : "Todos"; }
+function genSig(it){ return it.key ? "k:"+it.key : [it.clase,it.carrera,it.grupo].join("|"); }
+function genAdd(list){
+  let added = 0, dup = 0;
+  for(const it of list){
+    if(stGen.items.length>=GEN_MAX){ toast("Puedes comparar hasta "+GEN_MAX+" elementos a la vez.", "error"); break; }
+    if(stGen.items.some(x=>genSig(x)===genSig(it))){ dup++; continue; }
+    if(!genRows(it).length) continue;
+    stGen.items.push({ ...it, id: ++genSeq });
+    added++;
+  }
+  if(!added && dup) toast("Eso ya está en la comparación.");
+  return added;
+}
+function genDefaults(){
+  if(stGen.init) return;
+  stGen.init = true;
+  if(classes.length>1) genAdd(classes.map(c=>({ clase:c.id, carrera:"all", grupo:"all", key:"" })));
+  else {
+    const byN = {}; allRows().forEach(r=>{ if(r.carrera!==SIN_CARRERA) byN[r.carrera] = (byN[r.carrera]||0)+1; });
+    genAdd(Object.entries(byN).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>({ clase:"all", carrera:k, grupo:"all", key:"" })));
+  }
+}
+function stdev(arr){
+  const v = arr.filter(x=>typeof x==="number"); if(v.length<2) return null;
+  const m = v.reduce((a,b)=>a+b,0)/v.length;
+  return Math.sqrt(v.reduce((s,x)=>s+(x-m)*(x-m),0)/(v.length-1));
+}
+
+function renderGeneral(){
+  const box = $("genBox"); if(!box) return;
+  genDefaults();
+  const rowsAll = allRows();
+  const b = stGen.b;
+  // opciones del constructor (carrera y grupo según la clase elegida; estudiantes según los tres filtros)
+  const base = filterRows(rowsAll, { clase:b.clase });
+  const carreras = distinct(base.map(r=>r.carrera)), grupos = distinct(base.map(r=>r.grupo));
+  if(b.carrera!=="all" && !carreras.includes(b.carrera)) b.carrera = "all";
+  if(b.grupo!=="all" && !grupos.includes(b.grupo)) b.grupo = "all";
+  const studs = filterRows(rowsAll, b).sort(byName);
+  if(b.key && !studs.some(r=>r.key===b.key)) b.key = "";
+
+  box.innerHTML = `
+    <div class="gen-builder">
+      <div class="row" style="margin-bottom:10px;">
+        <div class="field"><label for="gbClase">Clase</label><select id="gbClase">${optionsHtml(classes.map(c=>({value:c.id,label:c.name})), b.clase, "Todas las clases")}</select></div>
+        <div class="field"><label for="gbCarrera">Carrera</label><select id="gbCarrera">${optionsHtml(carreras, b.carrera, "Todas las carreras")}</select></div>
+        <div class="field"><label for="gbGrupo">Grupo</label><select id="gbGrupo">${optionsHtml(grupos, b.grupo, "Todos los grupos")}</select></div>
+        <div class="field grow"><label for="gbKey">Estudiante (opcional)</label><select id="gbKey">${optionsHtml(studs.map(r=>({value:r.key, label:r.st.nombre+"  ·  "+r.carrera+"  ·  "+r.cls.name})), b.key, "— El grupo completo —")}</select></div>
+        <button class="btn" type="button" id="gbAdd" title="Agregar esta selección a la comparación">+ Agregar</button>
+      </div>
+      <div class="gen-presets">
+        <span class="muted">Atajos:</span>
+        <button class="btn ghost small" type="button" data-preset="clases">Cada clase${b.carrera!=="all"?" (solo "+esc(b.carrera)+")":""}</button>
+        <button class="btn ghost small" type="button" data-preset="carreras">Carreras principales${b.clase!=="all"?" de esta clase":""}</button>
+        <button class="btn ghost small" type="button" data-preset="carrera-clases" ${b.carrera==="all"?"disabled title=\"Elige primero una carrera arriba\"":""}>${b.carrera==="all" ? "Una carrera en cada clase" : esc(b.carrera)+" en cada clase"}</button>
+        <button class="btn ghost small" type="button" data-preset="todos">+ Todos (referencia)</button>
+        ${stGen.items.length ? `<button class="link" type="button" id="gbClear" style="margin-left:auto;">Vaciar</button>` : ""}
+      </div>
+    </div>
+    <div class="chips gen-chips" id="gbChips">${stGen.items.map((it,i)=>`<div class="chip" style="--swatch:${colorFor(i)}"><span><small class="muted">${esc(genKind(it))}</small> ${esc(genLabel(it))}</span> <button type="button" data-rm="${it.id}" title="Quitar" aria-label="Quitar">&times;</button></div>`).join("")}</div>
+    <div id="genOut"></div>
+  `;
+  const set = (k)=>(e)=>{ b[k] = e.target.value; if(k!=="key") b.key = ""; renderGeneral(); };
+  $("gbClase").onchange = (e)=>{ b.clase = e.target.value; b.key = ""; renderGeneral(); };
+  $("gbCarrera").onchange = set("carrera");
+  $("gbGrupo").onchange = set("grupo");
+  $("gbKey").onchange = (e)=>{ b.key = e.target.value==="all" ? "" : e.target.value; };
+  $("gbAdd").onclick = ()=>{ if(genAdd([{ clase:b.clase, carrera:b.carrera, grupo:b.grupo, key:b.key }])) renderGeneral(); };
+  if($("gbClear")) $("gbClear").onclick = ()=>{ stGen.items = []; renderGeneral(); };
+  box.querySelectorAll("[data-preset]").forEach(btn=>btn.onclick = ()=>{
+    const p = btn.dataset.preset;
+    let list = [];
+    if(p==="clases") list = classes.map(c=>({ clase:c.id, carrera:b.carrera, grupo:b.grupo, key:"" }));
+    if(p==="carrera-clases") list = classes.map(c=>({ clase:c.id, carrera:b.carrera, grupo:"all", key:"" }));
+    if(p==="carreras"){
+      const byN = {}; filterRows(rowsAll, { clase:b.clase, grupo:b.grupo }).forEach(r=>{ if(r.carrera!==SIN_CARRERA) byN[r.carrera]=(byN[r.carrera]||0)+1; });
+      list = Object.entries(byN).sort((x,y)=>y[1]-x[1]).slice(0,5).map(([k])=>({ clase:b.clase, carrera:k, grupo:b.grupo, key:"" }));
+    }
+    if(p==="todos") list = [{ clase:"all", carrera:"all", grupo:"all", key:"" }];
+    if(p!=="todos") stGen.items = stGen.items.filter(x=>genKind(x)==="Todos");   // un atajo reemplaza la comparación (salvo la referencia)
+    const n = genAdd(list);
+    if(!n && p!=="todos") toast("No hay datos para ese atajo con los filtros elegidos.", "error");
+    else if(n===1 && p==="carrera-clases") toast(b.carrera+" solo tiene estudiantes en una de tus clases. Agrega otros elementos para comparar.", "error");
+    renderGeneral();
+  });
+  $("gbChips").onclick = (e)=>{ const x = e.target.closest("button[data-rm]"); if(!x) return; stGen.items = stGen.items.filter(i=>i.id!==+x.dataset.rm); renderGeneral(); };
+  drawGeneral();
+}
+
+function drawGeneral(){
+  const out = $("genOut");
+  const items = stGen.items.map((it,i)=>{
+    const rows = genRows(it);
+    const idxs = rows.map(r=>r.indice).filter(v=>v!==null);
+    return { it, i, rows, label:genLabel(it), color:colorFor(i), n:rows.length, idx:mean(idxs), sd:stdev(idxs),
+      low: idxs.filter(v=>v<34).length, high: idxs.filter(v=>v>=66).length, single: !!it.key };
+  }).filter(g=>g.n);
+  if(items.length<2){ out.innerHTML = '<div class="placeholder">Agrega al menos dos elementos para compararlos. Usa un atajo o arma tu propia selección arriba.</div>'; return; }
+
+  const rowsAll = allRows();
+  const allIdx = avgOf(rowsAll, GENERAL);
   const metrics = allMetrics();
-  const groups = stCar.sel.map(k=>({ k, rows: rows.filter(r=>r.carrera===k) }));
-  const series = groups.map(g=>({ name:g.k+" (n="+g.rows.length+")", color:carreraColor(g.k), values: metrics.map(m=>avgOf(g.rows,m)) }));
-  const ref = { name:"Promedio de todos", color:INK, values: metrics.map(m=>avgOf(rows,m)), fillOpacity:0, strokeWidth:1.3, dash:"3,3", points:false };
-  const labels = metrics.map(mLabel);
-  const chart = stCar.view==="radar"
-    ? radarChartSVG(labels, (stCar.vsAll ? [ref] : []).concat(series.map(s=>({...s, fillOpacity:0.1, strokeWidth:2}))), {label:"Comparación de carreras"})
-    : barChartHorizontalSVG(labels, series.concat(stCar.vsAll ? [{...ref, color:"#9A9380"}] : []), {label:"Comparación de carreras"});
-  const legend = legendRow(series.map(s=>({color:s.color, label:s.name})).concat(stCar.vsAll ? [{color:stCar.view==="radar"?INK:"#9A9380", label:"Promedio de todos", dash:stCar.view==="radar"}] : []));
-  box.innerHTML = `${chart}${legend}
+  const sparse = new Set(metrics.filter(m=>{ const v = rowsAll.map(r=>metricValue(r.cls,r.st,m)).filter(x=>x!==null); return v.length && v.filter(x=>x===0).length/v.length>=0.7; }));
+  const useM = metrics.filter(m=>!sparse.has(m));
+  items.forEach(g=>{ g.vals = useM.map(m=>avgOf(g.rows,m)); });
+
+  // ---- conclusiones automáticas
+  const groupsOnly = items.filter(g=>!g.single);
+  const solid = groupsOnly.filter(g=>g.n>=SMALL_N);
+  const pool = (solid.length>=2 ? solid : items).slice().sort((a,b)=>(b.idx??-1)-(a.idx??-1));
+  const best = pool[0], worst = pool[pool.length-1];
+  const gaps = useM.map((m,j)=>{
+    const vs = items.map(g=>({ g, v:g.vals[j] })).filter(x=>x.v!==null);
+    if(vs.length<2) return null;
+    const risk = isRisk(m);
+    vs.sort((a,b)=> risk ? a.v-b.v : b.v-a.v);         // el "mejor" primero (en riesgo, el más bajo)
+    return { m, j, best:vs[0], worst:vs[vs.length-1], gap: Math.abs(vs[0].v-vs[vs.length-1].v), risk };
+  }).filter(Boolean).sort((a,b)=>b.gap-a.gap);
+  const lowPct = groupsOnly.map(g=>({ g, p: g.n ? g.low/g.n : 0 })).sort((a,b)=>b.p-a.p);
+  const ins = [];
+  if(best && worst && best!==worst){
+    const d = (best.idx??0)-(worst.idx??0);
+    ins.push(d < 3
+      ? `Los elementos comparados rinden de forma <b>muy parecida</b>: la diferencia de índice entre el más alto y el más bajo es de solo ${fmt(d)} puntos.`
+      : `<b>${esc(best.label)}</b> tiene el índice más alto (${fmt(best.idx)}) y <b>${esc(worst.label)}</b> el más bajo (${fmt(worst.idx)}): una diferencia de <b>${fmt(d)} puntos</b>.`);
+  }
+  gaps.slice(0,2).forEach((x,k)=>{ if(x.gap>=5) ins.push(`${k===0 ? "La mayor diferencia está en" : "Le sigue"} <b>${esc(x.m)}</b>${x.risk?" (↓ menos es mejor)":""}: ${esc(x.best.g.label)} ${fmt(x.best.v)} frente a ${esc(x.worst.g.label)} ${fmt(x.worst.v)} (${fmt(x.gap)} puntos).`); });
+  if(lowPct[0] && lowPct[0].p>0) ins.push(`<b>${esc(lowPct[0].g.label)}</b> concentra la mayor proporción en nivel bajo: ${lowPct[0].g.low} de ${lowPct[0].g.n} estudiantes (${Math.round(lowPct[0].p*100)}%).`);
+  const wide = groupsOnly.filter(g=>g.sd!==null && g.n>=SMALL_N).sort((a,b)=>b.sd-a.sd)[0];
+  if(wide && wide.sd>=15) ins.push(`<b>${esc(wide.label)}</b> es el más desigual (desviación ${fmt(wide.sd)}): conviven estudiantes muy fuertes y muy débiles, así que su promedio oculta diferencias.`);
+  const small = groupsOnly.filter(g=>g.n<SMALL_N);
+  if(small.length) ins.push(`<span class="warn-txt">Cuidado:</span> ${small.map(g=>`${esc(g.label)} (n=${g.n})`).join(", ")} ${small.length>1?"tienen":"tiene"} muy pocos estudiantes; sus promedios pueden cambiar mucho con uno solo.`);
+
+  // ---- gráficos
+  const labels = useM.map(mLabel);
+  const series = items.map(g=>({ name:g.label+(g.single?"":" (n="+g.n+")"), color:g.color, values:g.vals }));
+  const profile = stGen.view==="radar"
+    ? radarChartSVG(labels, series.map(s=>({...s, fillOpacity:0.08, strokeWidth:2})), {label:"Perfil de competencias"})
+    : barChartHorizontalSVG(labels, series, {label:"Perfil de competencias"});
+
+  out.innerHTML = `
+    ${ins.length ? `<div class="box insights"><h3>Conclusiones</h3><ul>${ins.map(t=>`<li>${t}</li>`).join("")}</ul></div>` : ""}
+
     <div class="table-wrap mt"><table>
-      <thead><tr><th class="sticky">Carrera</th><th class="num">Estudiantes</th><th class="num" title="${esc(metricHelp(GENERAL))}">Índice</th>${metrics.map(m=>`<th class="num" title="${esc(metricHelp(m))}">${esc(mLabel(m))}</th>`).join("")}</tr></thead>
-      <tbody>${groups.map((g,i)=>{ const idx = avgOf(g.rows, GENERAL); return `<tr class="click-row" data-filter="carrera:${esc(g.k)}" title="Ver sus estudiantes">
-        <td class="sticky"><span class="legend-swatch" style="background:${series[i].color}"></span> <b>${esc(g.k)}</b></td>
-        <td class="num">${g.rows.length}</td><td class="num ${heatClass(GENERAL,idx)}"><b>${fmt(idx)}</b></td>
-        ${series[i].values.map((v,j)=>`<td class="num ${heatClass(metrics[j],v)}">${fmt(v)}</td>`).join("")}</tr>`; }).join("")}
-      ${stCar.vsAll ? `<tr><td class="sticky muted">Promedio de todos</td><td class="num muted">${rows.length}</td><td class="num muted">${fmt(avgOf(rows,GENERAL))}</td>${ref.values.map(v=>`<td class="num muted">${fmt(v)}</td>`).join("")}</tr>` : ""}
-      </tbody></table></div>`;
+      <thead><tr><th class="sticky">Comparando</th><th>Tipo</th><th class="num">Estudiantes</th><th class="num" title="${esc(metricHelp(GENERAL))}">Índice</th>
+        <th class="num" title="Diferencia con el promedio de todos (${fmt(allIdx)})">vs todos</th><th class="num">Nivel bajo</th><th class="num">Nivel alto</th>
+        <th class="num" title="Desviación estándar del índice: cuanto más alta, más desigual es el grupo">Dispersión</th></tr></thead>
+      <tbody>${items.map(g=>`<tr>
+        <td class="sticky"><span class="legend-swatch" style="background:${g.color}"></span> <b>${g.single?`<button class="name-link" type="button" data-profile="${esc(g.it.key)}">${esc(g.label)}</button>`:esc(g.label)}</b></td>
+        <td class="muted">${esc(genKind(g.it))}</td>
+        <td class="num">${g.n}${!g.single && g.n<SMALL_N ? ' <span class="status off" title="Muestra pequeña: el promedio es poco confiable">pocos</span>' : ""}</td>
+        <td class="num ${heatClass(GENERAL,g.idx)}"><b>${fmt(g.idx)}</b></td>
+        <td class="num ${g.idx===null||allIdx===null?"":(g.idx-allIdx)>=0?"pos":"neg"}">${g.idx===null||allIdx===null?"—":fmtDiff(g.idx-allIdx)}</td>
+        <td class="num">${g.single?"—":Math.round(g.low/g.n*100)+"%"}</td>
+        <td class="num">${g.single?"—":Math.round(g.high/g.n*100)+"%"}</td>
+        <td class="num">${g.sd===null?"—":fmt(g.sd)}</td></tr>`).join("")}</tbody>
+    </table></div>
+
+    <div class="box mt">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px;">
+        <h3 style="margin:0;">Perfil de competencias</h3>
+        ${segHtml("genView",[{value:"radar",label:"Araña"},{value:"barras",label:"Barras"}], stGen.view)}
+      </div>
+      ${profile}${stGen.view==="radar" ? "" : legendRow(series.map(s=>({color:s.color,label:s.name})))}
+    </div>
+
+    <h3 class="section-title mt">Dónde difieren más</h3>
+    <p class="legend-note" style="margin:-6px 0 10px;">Competencias ordenadas por la brecha entre el mejor y el peor. Son los puntos donde una intervención puede marcar más diferencia.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th class="sticky">Competencia</th>${items.map(g=>`<th class="num" title="${esc(g.label)}"><span class="legend-swatch" style="background:${g.color}"></span> ${esc(g.label.length>18?g.label.slice(0,17)+"…":g.label)}</th>`).join("")}<th class="num">Brecha</th><th>Mejor</th></tr></thead>
+      <tbody>${gaps.slice(0,10).map(x=>`<tr>
+        <td class="sticky" title="${esc(metricHelp(x.m))}">${esc(mLabel(x.m))}</td>
+        ${items.map(g=>{ const v = g.vals[x.j]; return `<td class="num ${heatClass(x.m,v)}${g===x.best.g?" best":""}">${fmt(v)}</td>`; }).join("")}
+        <td class="num"><b>${fmt(x.gap)}</b></td><td>${esc(x.best.g.label)}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <div class="legend-note">${METRIC_NOTE}${sparse.size?" No se incluyen competencias que casi nadie activa ("+[...sparse].map(esc).join(", ")+").":""}</div>
+  `;
+  wireSeg("genView", v=>{ stGen.view = v; drawGeneral(); });
 }
 
 /* ---------- Comparar estudiantes (todos; araña solo decano/admin) ----------
@@ -1449,11 +1693,12 @@ function drawComparar(){
   if(!sel.length){ body.innerHTML = '<div class="placeholder">Todavía no has elegido estudiantes.<br>Usa los filtros, elige un estudiante y pulsa "Agregar" (o haz doble clic en la lista).</div>'; return; }
   const metrics = allMetrics();
   const series = sel.map((r,i)=>({ name:r.st.nombre, color:colorFor(i), values: metrics.map(m=>metricValue(r.cls,r.st,m)) }));
-  const chart = stCmp.view==="radar" && canRadar()
+  const isRadar = stCmp.view==="radar" && canRadar();
+  const chart = isRadar
     ? radarChartSVG(metrics.map(mLabel), series.map(s=>({...s, fillOpacity:0.1, strokeWidth:2})), {label:"Comparación de estudiantes"})
     : barChartHorizontalSVG(metrics.map(mLabel), series, {label:"Comparación de estudiantes"});
   body.innerHTML = `
-    <div class="box">${chart}${legendRow(sel.map((r,i)=>({color:colorFor(i), label:r.st.nombre})))}
+    <div class="box">${chart}${isRadar ? "" : legendRow(sel.map((r,i)=>({color:colorFor(i), label:r.st.nombre})))}
       <div class="legend-note">${METRIC_NOTE} Pasa el cursor sobre ${canRadar()?"un punto o ":""}una barra para ver su valor.</div></div>
     <div class="table-wrap mt"><table>
       <thead><tr><th class="sticky">Estudiante</th><th>Clase</th><th>Carrera</th><th>Grupo</th><th class="num">Índice</th>${metrics.map(m=>`<th class="num" title="${esc(metricHelp(m))}">${esc(mLabel(m))}</th>`).join("")}</tr></thead>
@@ -1564,7 +1809,8 @@ function drawPerfil(cls, rowsCls, row){
   series.push({name:row.st.nombre, values:vals, color:cls.color, fillOpacity:0.28, strokeWidth:2.4});
   legend.push({color:cls.color, label:row.st.nombre});
   const labels = metrics.map(mLabel);
-  const chart = stPer.view==="radar" && canRadar()
+  const isRadar = stPer.view==="radar" && canRadar();
+  const chart = isRadar
     ? radarChartSVG(labels, series, {label:"Perfil de "+row.st.nombre})
     : barChartHorizontalSVG(labels, series.slice().reverse(), {label:"Perfil de "+row.st.nombre});
 
@@ -1583,7 +1829,7 @@ function drawPerfil(cls, rowsCls, row){
         <label><input type="checkbox" data-k="vsCarrera" ${stPer.vsCarrera?"checked":""} ${carRows.length?"":"disabled"}> su carrera</label>
         <label><input type="checkbox" data-k="vsGlobal" ${stPer.vsGlobal?"checked":""}> todos los estudiantes</label>
       </div>
-      ${chart}${legendRow(legend)}
+      ${chart}${isRadar ? "" : legendRow(legend)}
       <div class="legend-note">${METRIC_NOTE}</div>
     </div>
     <div class="two-col">
@@ -1854,7 +2100,7 @@ function drawAdminUsuarios(){
       </table>
     </div>
     <div class="legend-note">
-      <b>Maestro:</b> resumen, carreras, comparar estudiantes, perfil y tabla de sus clases (gráficos de barras). &nbsp; <b>Decano:</b> lo mismo, más gráfico araña y comparación entre carreras. &nbsp; <b>Administrador:</b> todo.
+      <b>Maestro:</b> resumen, carreras, comparar estudiantes, perfil y tabla de sus clases (gráficos de barras). &nbsp; <b>Decano:</b> lo mismo, más gráfico araña y la comparación general (clases, carreras, grupos y estudiantes). &nbsp; <b>Administrador:</b> todo.
       &nbsp;·&nbsp; <button class="link" type="button" id="uImport">Importar usuarios.json</button><input type="file" id="uImportFile" accept=".json,application/json">
     </div>
   `;
