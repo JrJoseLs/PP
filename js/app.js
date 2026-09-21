@@ -320,19 +320,20 @@ function logout(){
 }
 
 /* ---------------- Pestañas por rol ----------------
-   maestro : Resumen, Por carrera, Perfil, Tabla   (solo sus clases)
-   decano  : + Comparar estudiantes                (solo sus clases)
+   maestro : Resumen, Por carrera, Comparar estudiantes, Perfil, Tabla   (solo sus clases, gráficos de barras)
+   decano  : lo mismo + gráfico araña y comparación entre carreras        (solo sus clases)
    admin   : todo, todas las clases + Administración                 */
 const TAB_DEFS = [
   { id:"resumen",  label:"Resumen",              roles:["admin","decano","maestro"] },
   { id:"carreras", label:"Por carrera",          roles:["admin","decano","maestro"] },
-  { id:"comparar", label:"Comparar estudiantes", roles:["admin","decano"] },
+  { id:"comparar", label:"Comparar estudiantes", roles:["admin","decano","maestro"] },
   { id:"perfil",   label:"Perfil",               roles:["admin","decano","maestro"] },
   { id:"tabla",    label:"Tabla",                roles:["admin","decano","maestro"] },
   { id:"usuarios", label:"Administración",       roles:["admin"] }
 ];
 let activeTab = null;
 function myTabs(){ const u = effUser(); return u ? TAB_DEFS.filter(t=>t.roles.includes(u.rol)) : []; }
+function canRadar(){ const u = effUser(); return !!u && u.rol!=="maestro"; }   // el maestro no usa gráfico araña
 function canSee(id){ return myTabs().some(t=>t.id===id); }
 function buildTabs(){
   const tabs = myTabs();
@@ -1262,7 +1263,8 @@ function renderPanelResumen(){
 }
 
 /* ---------- Por carrera (decano / admin) ---------- */
-const stCar = { metric:GENERAL, clase:"all", grupo:"all" };
+const stCar = { metric:GENERAL, clase:"all", grupo:"all", sel:[], touched:false, view:"radar", vsAll:true };
+const CAR_MAX = 6;
 
 function renderPanelCarreras(){
   const panel = $("panel-carreras");
@@ -1291,6 +1293,17 @@ function renderPanelCarreras(){
     ${sin ? `<div class="notice">${plural(sin.n,"estudiante no tiene","estudiantes no tienen")} carrera asignada. ${isAdmin() ? `Carga el listado de estudiantes o escríbela en la <button class="link" type="button" data-goto="tabla">Tabla</button>.` : "El administrador puede asignarla."}</div>` : ""}
     <div class="box" id="carChart"></div>
     <div class="legend-note">${METRIC_NOTE}</div>
+    ${canRadar() ? `
+    <h3 class="section-title mt">Comparar carreras</h3>
+    <div class="legend-note" style="margin:-6px 0 10px;">Elige hasta ${CAR_MAX} carreras para ver todas sus competencias lado a lado (promedio de sus estudiantes${stCar.clase!=="all"||stCar.grupo!=="all"?", con los filtros de arriba":""}).</div>
+    <div class="box">
+      <div class="car-pick" id="carPick"></div>
+      <div class="row" style="margin:12px 0 0;align-items:center;">
+        <div class="field"><label>Vista</label>${segHtml("carView",[{value:"radar",label:"Araña"},{value:"barras",label:"Barras"}], stCar.view)}</div>
+        <label class="checks" style="padding-top:18px;"><input type="checkbox" id="carVsAll" ${stCar.vsAll?"checked":""}> Mostrar el promedio de todos</label>
+      </div>
+      <div id="carCmp"></div>
+    </div>` : ""}
     <h3 class="section-title mt">Carrera por clase</h3>
     <div class="legend-note" style="margin:-6px 0 10px;">Promedio de <b>${esc(mLabel(stCar.metric))}</b> de cada carrera en cada clase. Entre paréntesis, la cantidad de estudiantes.</div>
     <div class="table-wrap" id="carTable"></div>
@@ -1307,6 +1320,26 @@ function renderPanelCarreras(){
   $("carChart").innerHTML = real.length
     ? rankBarsSVG(real.map(s=>({label:s.carrera, value:s.avg, n:s.n, color:carreraColor(s.carrera), filter:"carrera:"+s.carrera})), {label:"Promedio por carrera"})
     : '<div class="placeholder">No hay estudiantes con ese filtro.</div>';
+
+  if(canRadar()){
+    const reales = stats.filter(s=>s.carrera!==SIN_CARRERA && s.n);
+    stCar.sel = stCar.sel.filter(k=>reales.some(s=>s.carrera===k));
+    if(!stCar.touched && !stCar.sel.length) stCar.sel = reales.slice().sort((a,b)=>b.n-a.n).slice(0,3).map(s=>s.carrera);
+    $("carPick").innerHTML = reales.length ? reales.map(s=>`<button type="button" class="pick ${stCar.sel.includes(s.carrera)?"on":""}" data-car="${esc(s.carrera)}" style="--swatch:${carreraColor(s.carrera)}" aria-pressed="${stCar.sel.includes(s.carrera)}">${esc(s.carrera)} <span class="count">${s.n}</span></button>`).join("")
+      : '<span class="legend-note">No hay estudiantes con carrera asignada.</span>';
+    $("carPick").onclick = (e)=>{
+      const b = e.target.closest("button[data-car]"); if(!b) return;
+      const k = b.dataset.car; stCar.touched = true;
+      if(stCar.sel.includes(k)) stCar.sel = stCar.sel.filter(x=>x!==k);
+      else if(stCar.sel.length>=CAR_MAX) return toast("Puedes comparar hasta "+CAR_MAX+" carreras a la vez.", "error");
+      else stCar.sel.push(k);
+      b.classList.toggle("on"); b.setAttribute("aria-pressed", stCar.sel.includes(k));
+      drawCarCompare(rows);
+    };
+    wireSeg("carView", v=>{ stCar.view = v; setSeg("carView", v); drawCarCompare(rows); });
+    $("carVsAll").onchange = (e)=>{ stCar.vsAll = e.target.checked; drawCarCompare(rows); };
+    drawCarCompare(rows);
+  }
 
   // matriz carrera × clase
   const cls = stCar.clase==="all" ? classes : classes.filter(c=>c.id===stCar.clase);
@@ -1337,7 +1370,30 @@ function renderPanelCarreras(){
   });
 }
 
-/* ---------- Comparar estudiantes (decano / admin) ----------
+function drawCarCompare(rows){
+  const box = $("carCmp"); if(!box) return;
+  if(!stCar.sel.length){ box.innerHTML = '<div class="placeholder" style="margin-top:12px;">Elige una o más carreras arriba.</div>'; return; }
+  const metrics = allMetrics();
+  const groups = stCar.sel.map(k=>({ k, rows: rows.filter(r=>r.carrera===k) }));
+  const series = groups.map(g=>({ name:g.k+" (n="+g.rows.length+")", color:carreraColor(g.k), values: metrics.map(m=>avgOf(g.rows,m)) }));
+  const ref = { name:"Promedio de todos", color:INK, values: metrics.map(m=>avgOf(rows,m)), fillOpacity:0, strokeWidth:1.3, dash:"3,3", points:false };
+  const labels = metrics.map(mLabel);
+  const chart = stCar.view==="radar"
+    ? radarChartSVG(labels, (stCar.vsAll ? [ref] : []).concat(series.map(s=>({...s, fillOpacity:0.1, strokeWidth:2}))), {label:"Comparación de carreras"})
+    : barChartHorizontalSVG(labels, series.concat(stCar.vsAll ? [{...ref, color:"#9A9380"}] : []), {label:"Comparación de carreras"});
+  const legend = legendRow(series.map(s=>({color:s.color, label:s.name})).concat(stCar.vsAll ? [{color:stCar.view==="radar"?INK:"#9A9380", label:"Promedio de todos", dash:stCar.view==="radar"}] : []));
+  box.innerHTML = `${chart}${legend}
+    <div class="table-wrap mt"><table>
+      <thead><tr><th class="sticky">Carrera</th><th class="num">Estudiantes</th><th class="num" title="${esc(metricHelp(GENERAL))}">Índice</th>${metrics.map(m=>`<th class="num" title="${esc(metricHelp(m))}">${esc(mLabel(m))}</th>`).join("")}</tr></thead>
+      <tbody>${groups.map((g,i)=>{ const idx = avgOf(g.rows, GENERAL); return `<tr class="click-row" data-filter="carrera:${esc(g.k)}" title="Ver sus estudiantes">
+        <td class="sticky"><span class="legend-swatch" style="background:${series[i].color}"></span> <b>${esc(g.k)}</b></td>
+        <td class="num">${g.rows.length}</td><td class="num ${heatClass(GENERAL,idx)}"><b>${fmt(idx)}</b></td>
+        ${series[i].values.map((v,j)=>`<td class="num ${heatClass(metrics[j],v)}">${fmt(v)}</td>`).join("")}</tr>`; }).join("")}
+      ${stCar.vsAll ? `<tr><td class="sticky muted">Promedio de todos</td><td class="num muted">${rows.length}</td><td class="num muted">${fmt(avgOf(rows,GENERAL))}</td>${ref.values.map(v=>`<td class="num muted">${fmt(v)}</td>`).join("")}</tr>` : ""}
+      </tbody></table></div>`;
+}
+
+/* ---------- Comparar estudiantes (todos; araña solo decano/admin) ----------
    renderPanelComparar dibuja los controles; syncComparar solo actualiza
    la lista, los seleccionados y el gráfico (búsqueda fluida).          */
 const stCmp = { clase:"all", carrera:"all", grupo:"all", q:"", sel:[], view:"radar" };
@@ -1357,7 +1413,7 @@ function renderPanelComparar(){
       <div class="field grow"><label for="cmpStudent">Estudiante (<span id="cmpCount">0</span> disponibles)</label><select id="cmpStudent"></select></div>
       <button class="btn" type="button" id="cmpAdd">Agregar</button>
       <button class="btn ghost" type="button" id="cmpClear">Quitar todos</button>
-      <div class="field"><label>Vista</label>${segHtml("cmpView",[{value:"radar",label:"Radar"},{value:"barras",label:"Barras"}], stCmp.view)}</div>
+      ${canRadar() ? `<div class="field"><label>Vista</label>${segHtml("cmpView",[{value:"radar",label:"Araña"},{value:"barras",label:"Barras"}], stCmp.view)}</div>` : ""}
     </div>
     <div class="chips" id="cmpChips"></div>
     <div id="cmpBody"></div>
@@ -1367,7 +1423,7 @@ function renderPanelComparar(){
   $("cmpAdd").onclick = ()=>{ const v = $("cmpStudent").value; if(v && stCmp.sel.length<CMP_MAX && !stCmp.sel.includes(v)){ stCmp.sel.push(v); syncComparar(); } };
   $("cmpStudent").ondblclick = ()=>$("cmpAdd").click();
   $("cmpClear").onclick = ()=>{ stCmp.sel = []; syncComparar(); };
-  wireSeg("cmpView", v=>{ stCmp.view = v; setSeg("cmpView", v); drawComparar(); });
+  if($("cmpView")) wireSeg("cmpView", v=>{ stCmp.view = v; setSeg("cmpView", v); drawComparar(); });
   syncComparar();
 }
 function syncComparar(){
@@ -1393,12 +1449,12 @@ function drawComparar(){
   if(!sel.length){ body.innerHTML = '<div class="placeholder">Todavía no has elegido estudiantes.<br>Usa los filtros, elige un estudiante y pulsa "Agregar" (o haz doble clic en la lista).</div>'; return; }
   const metrics = allMetrics();
   const series = sel.map((r,i)=>({ name:r.st.nombre, color:colorFor(i), values: metrics.map(m=>metricValue(r.cls,r.st,m)) }));
-  const chart = stCmp.view==="radar"
+  const chart = stCmp.view==="radar" && canRadar()
     ? radarChartSVG(metrics.map(mLabel), series.map(s=>({...s, fillOpacity:0.1, strokeWidth:2})), {label:"Comparación de estudiantes"})
     : barChartHorizontalSVG(metrics.map(mLabel), series, {label:"Comparación de estudiantes"});
   body.innerHTML = `
     <div class="box">${chart}${legendRow(sel.map((r,i)=>({color:colorFor(i), label:r.st.nombre})))}
-      <div class="legend-note">${METRIC_NOTE} Pasa el cursor sobre un punto o una barra para ver su valor.</div></div>
+      <div class="legend-note">${METRIC_NOTE} Pasa el cursor sobre ${canRadar()?"un punto o ":""}una barra para ver su valor.</div></div>
     <div class="table-wrap mt"><table>
       <thead><tr><th class="sticky">Estudiante</th><th>Clase</th><th>Carrera</th><th>Grupo</th><th class="num">Índice</th>${metrics.map(m=>`<th class="num" title="${esc(metricHelp(m))}">${esc(mLabel(m))}</th>`).join("")}</tr></thead>
       <tbody>${sel.map((r,i)=>`<tr>
@@ -1445,7 +1501,7 @@ function renderPanelPerfil(){
       <div class="field grow"><label for="pfStudent">Estudiante (<span id="pfCount">0</span>)</label><select id="pfStudent"></select></div>
       <button class="btn ghost" type="button" id="pfPrev" title="Anterior (tecla ←)" aria-label="Estudiante anterior">&#8592;</button>
       <button class="btn ghost" type="button" id="pfNext" title="Siguiente (tecla →)" aria-label="Estudiante siguiente">&#8594;</button>
-      <div class="field"><label>Vista</label>${segHtml("pfView",[{value:"radar",label:"Radar"},{value:"barras",label:"Barras"}], stPer.view)}</div>
+      ${canRadar() ? `<div class="field"><label>Vista</label>${segHtml("pfView",[{value:"radar",label:"Araña"},{value:"barras",label:"Barras"}], stPer.view)}</div>` : ""}
       <button class="btn ghost" type="button" id="pfPrint" title="Imprimir o guardar como PDF">Imprimir</button>
     </div>
     <div id="pfBody"></div>
@@ -1457,7 +1513,7 @@ function renderPanelPerfil(){
   $("pfPrev").onclick = ()=>stepPerfil(-1);
   $("pfNext").onclick = ()=>stepPerfil(1);
   $("pfPrint").onclick = ()=>window.print();
-  wireSeg("pfView", v=>{ stPer.view = v; setSeg("pfView", v); syncPerfil(); });
+  if($("pfView")) wireSeg("pfView", v=>{ stPer.view = v; setSeg("pfView", v); syncPerfil(); });
   syncPerfil();
 }
 function stepPerfil(d){
@@ -1508,7 +1564,7 @@ function drawPerfil(cls, rowsCls, row){
   series.push({name:row.st.nombre, values:vals, color:cls.color, fillOpacity:0.28, strokeWidth:2.4});
   legend.push({color:cls.color, label:row.st.nombre});
   const labels = metrics.map(mLabel);
-  const chart = stPer.view==="radar"
+  const chart = stPer.view==="radar" && canRadar()
     ? radarChartSVG(labels, series, {label:"Perfil de "+row.st.nombre})
     : barChartHorizontalSVG(labels, series.slice().reverse(), {label:"Perfil de "+row.st.nombre});
 
@@ -1798,7 +1854,7 @@ function drawAdminUsuarios(){
       </table>
     </div>
     <div class="legend-note">
-      <b>Maestro:</b> resumen, carreras, perfil y tabla de sus clases. &nbsp; <b>Decano:</b> además compara estudiantes entre sus clases. &nbsp; <b>Administrador:</b> todo.
+      <b>Maestro:</b> resumen, carreras, comparar estudiantes, perfil y tabla de sus clases (gráficos de barras). &nbsp; <b>Decano:</b> lo mismo, más gráfico araña y comparación entre carreras. &nbsp; <b>Administrador:</b> todo.
       &nbsp;·&nbsp; <button class="link" type="button" id="uImport">Importar usuarios.json</button><input type="file" id="uImportFile" accept=".json,application/json">
     </div>
   `;
