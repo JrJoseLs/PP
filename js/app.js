@@ -2528,13 +2528,30 @@ function ghGuess(){
   return { owner:"", repo:"" };
 }
 function ghHeaders(token){ return { "Authorization":"Bearer "+token, "Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28" }; }
+/* Pasos para dar permiso de escritura a un token (se muestran cuando GitHub responde 403) */
+const GH_PERM_HELP = `El token puede leer el repositorio pero <b>no tiene permiso para escribir</b>. Arréglalo así (no hace falta crear otro):
+  <ol style="margin:6px 0 0;padding-left:18px;">
+    <li>En github.com: tu foto → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → abre tu token → <b>Edit</b>.</li>
+    <li><b>Repository access</b>: <i>Only select repositories</i> y marca este repositorio.</li>
+    <li><b>Permissions → Repository permissions → Contents</b>: cambia a <b>Read and write</b>.</li>
+    <li>Pulsa <b>Update</b> al final de la página y vuelve a publicar aquí.</li>
+  </ol>
+  <span class="muted">Si el repositorio es de una organización, un dueño de la organización también debe aprobar el token.</span>`;
+function ghPermError(){ const e = new Error("el token no tiene permiso de escritura en el repositorio"); e.help = GH_PERM_HELP; return e; }
+
 async function ghConnect(owner, repo, token){
-  const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, { headers: ghHeaders(token) });
+  const base = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const r = await fetch(base, { headers: ghHeaders(token) });
   if(r.status===401) throw new Error("el token no es válido o expiró");
-  if(r.status===404) throw new Error("no encontré el repositorio, o el token no tiene acceso a él");
+  if(r.status===404) throw new Error("no encontré el repositorio, o el token no tiene acceso a él (revisa Repository access)");
   if(!r.ok) throw new Error("GitHub respondió "+r.status);
   const j = await r.json();
-  if(j.permissions && !j.permissions.push) throw new Error("el token no tiene permiso de escritura (Contents: Read and write)");
+  // Comprobación real de escritura: crea un "blob" suelto (no cambia ningún archivo ni aparece en el historial).
+  // Leer el repositorio no basta: un token de solo lectura pasaba la prueba y fallaba al publicar.
+  const w = await fetch(base+"/git/blobs", { method:"POST", headers:{ ...ghHeaders(token), "Content-Type":"application/json" },
+    body: JSON.stringify({ content:"Comprobación de permisos del Comparador", encoding:"utf-8" }) });
+  if(w.status===403 || w.status===404) throw ghPermError();
+  if(!w.ok) throw new Error("GitHub respondió "+w.status+" al comprobar el permiso de escritura");
   const cfg = { owner:j.owner.login, repo:j.name, branch:j.default_branch || "main", token };
   store.set(GH_KEY, cfg);
   return cfg;
@@ -2547,11 +2564,17 @@ async function ghPut(cfg, path, text, message){
   else if(g.status!==404) throw new Error("no pude leer "+path+" ("+g.status+")");
   const body = { message, content: b64(te.encode(text)), branch: cfg.branch };
   if(sha) body.sha = sha;
-  const r = await fetch(url, { method:"PUT", headers: { ...ghHeaders(cfg.token), "Content-Type":"application/json" }, body: JSON.stringify(body) });
-  if(!r.ok){
-    const t = await r.json().catch(()=>({}));
-    throw new Error("no pude guardar "+path+" ("+r.status+(t.message?": "+t.message:"")+")");
+  const put = ()=>fetch(url, { method:"PUT", headers: { ...ghHeaders(cfg.token), "Content-Type":"application/json" }, body: JSON.stringify(body) });
+  let r = await put();
+  if(r.status===409 || r.status===422){                    // el archivo cambió mientras tanto: se toma la versión nueva y se reintenta
+    const g2 = await fetch(url+"?ref="+encodeURIComponent(cfg.branch)+"&t="+Date.now(), { headers: ghHeaders(cfg.token), cache:"no-store" });
+    if(g2.ok){ body.sha = (await g2.json()).sha; r = await put(); }
   }
+  if(r.ok) return;
+  if(r.status===403) throw ghPermError();
+  if(r.status===401) throw new Error("el token no es válido o expiró; conecta uno nuevo");
+  const t = await r.json().catch(()=>({}));
+  throw new Error("no pude guardar "+path+" ("+r.status+(t.message?": "+t.message:"")+")");
 }
 function usersExport(){
   return { updatedAt: userDb.updatedAt || Date.now(), users: userDb.users.map(u=>{
@@ -2560,6 +2583,7 @@ function usersExport(){
     return o; }) };
 }
 let publishing = false;
+let pubError = null;   // último error al publicar, con ayuda para resolverlo
 async function publishNow(btn){
   const cfg = ghConfig();
   if(!cfg) return goAdmin("publicar");
@@ -2573,7 +2597,7 @@ async function publishNow(btn){
     const users = usersExport();
     await ghPut(cfg, "usuarios.json", JSON.stringify(users, null, 2), "Actualizar usuarios ("+who+")");
     await ghPut(cfg, "datos.json", JSON.stringify(datos), "Actualizar clases ("+who+")");
-    published = datos; publishedStatus = "ok";
+    published = datos; publishedStatus = "ok"; pubError = null;
     remoteUpdatedAt = userDb.updatedAt;
     store.set("pp_lastpub", { at: Date.now(), by: who });
     refreshAdminChrome(); renderSidebar();
@@ -2581,8 +2605,10 @@ async function publishNow(btn){
     toast("¡Publicado! En uno o dos minutos los maestros y decanos verán los cambios al recargar la página.");
   }catch(err){
     console.error(err);
-    toast("No se pudo publicar: "+err.message, "error");
+    pubError = { msg: err.message, help: err.help || "" };
+    toast("No se pudo publicar: "+err.message+(err.help ? ". Mira los pasos en Administración → Publicar." : ""), "error");
     if(btn){ btn.disabled = false; btn.textContent = label; }
+    if(activeTab==="usuarios" && adminTab==="publicar") drawAdminPublicar(); else goAdmin("publicar");
   }finally{ publishing = false; }
 }
 function drawAdminPublicar(){
@@ -2603,14 +2629,20 @@ function drawAdminPublicar(){
         ? "Los maestros y decanos solo ven lo publicado. Pendiente: "+[pendU?"usuarios":"", pendD?"clases y asignaciones":""].filter(Boolean).join(" y ")+"."
         : "Los maestros y decanos ven la versión actual."}${last ? " Última publicación desde este equipo: "+new Date(last.at).toLocaleString("es")+"." : ""}</div>
       ${issues.length ? `<ul class="issues">${issues.map(i=>`<li>${i}</li>`).join("")}</ul>` : ""}
-      ${cfg ? `<div class="row" style="margin:14px 0 0;"><button class="btn" type="button" id="pubNow" ${pending?"":""}>${pending?"Publicar ahora":"Publicar de nuevo"}</button></div>` : ""}
+      ${pubError ? `<div class="notice warn" style="margin:12px 0 0;"><b>No se pudo publicar:</b> ${esc(pubError.msg)}.${pubError.help ? "<div style=\"margin-top:6px;\">"+pubError.help+"</div>" : ""}</div>` : ""}
+      ${cfg ? `<div class="row" style="margin:14px 0 0;"><button class="btn" type="button" id="pubNow">${pubError ? "Reintentar publicación" : pending ? "Publicar ahora" : "Publicar de nuevo"}</button></div>` : ""}
     </div>
 
     <div class="box mt">
       <h3>Publicación directa en GitHub ${cfg ? '<span class="status on">conectado</span>' : ""}</h3>
       ${cfg ? `
         <p class="legend-note" style="margin:0 0 10px;">Publicando en <b>${esc(cfg.owner)}/${esc(cfg.repo)}</b> (rama ${esc(cfg.branch)}). Con un clic se actualizan usuarios.json y datos.json.</p>
-        <button class="btn ghost small" type="button" id="ghOff">Desconectar este equipo</button>`
+        <div class="row" style="margin:0;align-items:flex-end;">
+          <div class="field"><label for="ghNewToken">Cambiar token</label><input class="input" type="password" id="ghNewToken" placeholder="github_pat_… (token nuevo o editado)" autocomplete="off"></div>
+          <button class="btn ghost small" type="button" id="ghSwap">Comprobar y guardar</button>
+          <button class="btn ghost small" type="button" id="ghOff">Desconectar este equipo</button>
+        </div>
+        <div class="err-inline" id="ghErr" role="alert"></div>`
       : `
         <p class="legend-note" style="margin:0 0 12px;">Conéctalo una sola vez y publicarás con un clic, sin descargar ni subir archivos. El token queda guardado solo en este navegador.</p>
         <div class="form-grid">
@@ -2625,7 +2657,7 @@ function drawAdminPublicar(){
             <li>En github.com abre tu foto → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li>
             <li>Nombre: "Comparador". Caducidad: la que prefieras (por ejemplo, 1 año).</li>
             <li><b>Repository access</b>: <i>Only select repositories</i> → elige solo este repositorio.</li>
-            <li><b>Permissions → Repository permissions → Contents</b>: <i>Read and write</i>.</li>
+            <li><b>Permissions → Repository permissions → Contents</b>: <i>Read and write</i>. <b>Importante:</b> con "Read-only" no se puede publicar.</li>
             <li>Pulsa <b>Generate token</b>, cópialo y pégalo aquí arriba.</li>
           </ol>
           <p class="legend-note">Ese token solo puede modificar este repositorio. Si alguna vez usas una computadora ajena, pulsa "Desconectar" al terminar.</p>
@@ -2646,6 +2678,13 @@ function drawAdminPublicar(){
     </details>
   `;
   if($("pubNow")) $("pubNow").onclick = (e)=>publishNow(e.currentTarget);
+  if($("ghSwap")) $("ghSwap").onclick = async()=>{
+    const b = $("ghSwap"), t = $("ghNewToken").value.trim();
+    if(!t){ $("ghErr").textContent = "Pega el token."; return; }
+    b.disabled = true; b.textContent = "Comprobando…"; $("ghErr").innerHTML = "";
+    try{ await ghConnect(cfg.owner, cfg.repo, t); pubError = null; toast("Token actualizado: tiene permiso de escritura."); drawAdminPublicar(); }
+    catch(err){ $("ghErr").innerHTML = "No se pudo usar ese token: "+esc(err.message)+"."+(err.help ? "<div class=\"legend-note\" style=\"color:var(--ink)\">"+err.help+"</div>" : ""); b.disabled = false; b.textContent = "Comprobar y guardar"; }
+  };
   if($("ghOff")) $("ghOff").onclick = ()=>{ if(confirm("¿Olvidar el token en este navegador?")){ store.del(GH_KEY); drawAdminPublicar(); renderPublishBanner(); } };
   if($("ghConnect")) $("ghConnect").onclick = async()=>{
     const b = $("ghConnect");
@@ -2653,7 +2692,7 @@ function drawAdminPublicar(){
     if(!owner || !repo || !token){ $("ghErr").textContent = "Completa los tres campos."; return; }
     b.disabled = true; b.textContent = "Comprobando…"; $("ghErr").textContent = "";
     try{ await ghConnect(owner, repo, token); toast("Conectado a GitHub."); drawAdminPublicar(); renderPublishBanner(); }
-    catch(err){ $("ghErr").textContent = "No se pudo conectar: "+err.message+"."; b.disabled = false; b.textContent = "Conectar"; }
+    catch(err){ $("ghErr").innerHTML = "No se pudo conectar: "+esc(err.message)+"."+(err.help ? "<div class=\"legend-note\" style=\"color:var(--ink)\">"+err.help+"</div>" : ""); b.disabled = false; b.textContent = "Conectar"; }
   };
   $("pubUsers").onclick = ()=>downloadBlob(JSON.stringify(usersExport(), null, 2), "usuarios.json", "application/json");
   $("pubData").onclick = exportPublished;
