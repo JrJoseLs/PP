@@ -320,8 +320,8 @@ function logout(){
 }
 
 /* ---------------- Pestañas por rol ----------------
-   maestro : Resumen, Por carrera, Comparar estudiantes, Perfil, Tabla   (solo sus clases, gráficos de barras)
-   decano  : lo mismo + gráfico araña y comparación general (clases, carreras, grupos, estudiantes)
+   maestro : Resumen, Por carrera, Comparar estudiantes, Perfil, Tabla   (solo sus clases; araña en Perfil y Comparar)
+   decano  : lo mismo + comparación general en Por carrera (clases, carreras, grupos, estudiantes)
    admin   : todo, todas las clases + Administración                 */
 const TAB_DEFS = [
   { id:"resumen",  label:"Resumen",              roles:["admin","decano","maestro"] },
@@ -333,7 +333,10 @@ const TAB_DEFS = [
 ];
 let activeTab = null;
 function myTabs(){ const u = effUser(); return u ? TAB_DEFS.filter(t=>t.roles.includes(u.rol)) : []; }
-function canRadar(){ const u = effUser(); return !!u && u.rol!=="maestro"; }   // el maestro no usa gráfico araña
+/* Gráfico araña: todos los roles, en las pestañas que cada uno ve y solo con sus propias clases.
+   Comparación general (Por carrera): solo decano y administrador. */
+function canRadar(){ return !!effUser(); }
+function canGeneral(){ const u = effUser(); return !!u && u.rol!=="maestro"; }
 function canSee(id){ return myTabs().some(t=>t.id===id); }
 function buildTabs(){
   const tabs = myTabs();
@@ -1406,7 +1409,7 @@ function renderPanelCarreras(){
   const sin = stats.find(s=>s.carrera===SIN_CARRERA);
 
   panel.innerHTML = `
-    <p class="panel-intro">Promedio de cada carrera, ordenado de mayor a menor. Puedes limitarlo a una clase o a un grupo. Haz clic en una carrera para ver sus estudiantes.${canRadar() ? ' Más abajo, la <a href="#genTitle">comparación general</a>.' : ""}</p>
+    <p class="panel-intro">Promedio de cada carrera, ordenado de mayor a menor. Puedes limitarlo a una clase o a un grupo. Haz clic en una carrera para ver sus estudiantes.${canGeneral() ? ' Más abajo, la <a href="#genTitle">comparación general</a>.' : ""}</p>
     <div class="row">
       <div class="field"><label for="carMetric">Competencia</label><select id="carMetric">${optionsHtml(opts, stCar.metric)}</select></div>
       ${filterFieldsHtml("car", stCar, rowsAll, ["clase","grupo"])}
@@ -1414,7 +1417,7 @@ function renderPanelCarreras(){
     ${sin ? `<div class="notice">${plural(sin.n,"estudiante no tiene","estudiantes no tienen")} carrera asignada. ${isAdmin() ? `Carga el listado de estudiantes o escríbela en la <button class="link" type="button" data-goto="tabla">Tabla</button>.` : "El administrador puede asignarla."}</div>` : ""}
     <div class="box" id="carChart"></div>
     <div class="legend-note">${METRIC_NOTE}</div>
-    ${canRadar() ? `
+    ${canGeneral() ? `
     <h3 class="section-title mt" id="genTitle">Comparación general</h3>
     <p class="panel-intro" style="margin:-6px 0 12px;">Compara lo que necesites para decidir: clases entre sí, carreras, una carrera en distintas clases, grupos o estudiantes concretos. Arma cada elemento con los filtros y pulsa "Agregar", o usa un atajo. Esta sección no depende de los filtros de arriba.</p>
     <div class="box" id="genBox"></div>` : ""}
@@ -1427,7 +1430,7 @@ function renderPanelCarreras(){
     ? rankBarsSVG(real.map(s=>({label:s.carrera, value:s.avg, n:s.n, color:carreraColor(s.carrera), filter:"carrera:"+s.carrera})), {label:"Promedio por carrera"})
     : '<div class="placeholder">No hay estudiantes con ese filtro.</div>';
 
-  if(canRadar()) renderGeneral();
+  if(canGeneral()) renderGeneral();
 
 }
 
@@ -2100,7 +2103,7 @@ function drawAdminUsuarios(){
       </table>
     </div>
     <div class="legend-note">
-      <b>Maestro:</b> resumen, carreras, comparar estudiantes, perfil y tabla de sus clases (gráficos de barras). &nbsp; <b>Decano:</b> lo mismo, más gráfico araña y la comparación general (clases, carreras, grupos y estudiantes). &nbsp; <b>Administrador:</b> todo.
+      <b>Maestro:</b> resumen, carreras, comparar estudiantes, perfil y tabla, solo de sus clases (con gráfico araña en Perfil y Comparar). &nbsp; <b>Decano:</b> lo mismo, más la comparación general en Por carrera (clases, carreras, grupos y estudiantes). &nbsp; <b>Administrador:</b> todo.
       &nbsp;·&nbsp; <button class="link" type="button" id="uImport">Importar usuarios.json</button><input type="file" id="uImportFile" accept=".json,application/json">
     </div>
   `;
