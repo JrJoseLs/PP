@@ -2,6 +2,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Api } from "./api";
 import type { Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, RosterEntry, Snapshot } from "../lib/types";
 
+// Nombre de la Edge Function de cuentas en Supabase (ver supabase/functions/manage-users)
+const USERS_FN = "clever-action";
 const toEmail = (u: string) => (u.includes("@") ? u : `${u}@pp.local`).trim().toLowerCase();
 
 export class SupabaseApi implements Api {
@@ -58,7 +60,7 @@ export class SupabaseApi implements Api {
   }
 
   private async fn(body: Record<string, unknown>) {
-    const { data, error } = await this.sb.functions.invoke("manage-users", { body });
+    const { data, error } = await this.sb.functions.invoke(USERS_FN, { body });
     if (error) {
       let msg = error.message;
       try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) msg = j.error; } catch { /* */ }

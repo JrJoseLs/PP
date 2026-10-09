@@ -6,7 +6,10 @@
 //   admin   → puede todo
 //   decano  → solo crea / gestiona maestros que le pertenecen (decano_id = él)
 //
-// Despliegue:  supabase functions deploy manage-users
+// Despliegue:  supabase functions deploy manage-users --no-verify-jwt
+//   (o desde el panel: Edge Functions → Deploy a new function → Via Editor).
+//   La sesión se valida aquí dentro con auth.getUser, por eso "Verify JWT" va apagado.
+//   El nombre de la función debe coincidir con USERS_FN en src/data/supabaseApi.ts.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors = {
@@ -24,7 +27,13 @@ const toEmail = (u: string) => (u.includes("@") ? u : `${u}@pp.local`).trim().to
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    // Llave de servicio: la clásica, o la nueva "secret key" en proyectos recientes
+    let serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!serviceKey) {
+      try { serviceKey = Object.values(JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"))[0] as string ?? ""; } catch { /* */ }
+    }
+    if (!serviceKey) return json({ error: "La función no tiene acceso a la llave de servicio" }, 500);
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, {
       auth: { persistSession: false },
     });
     const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");

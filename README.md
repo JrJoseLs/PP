@@ -41,11 +41,11 @@ npm run dev          # http://localhost:5173  (modo demo)
 1. Crea un proyecto en <https://supabase.com> (región cercana, p. ej. `us-east-1`).
 2. **SQL Editor → New query**: pega el contenido de [`supabase/migrations/001_esquema.sql`](supabase/migrations/001_esquema.sql) y pulsa **Run**.
 3. **Authentication → Sign In / Providers → Email**: desactiva **“Allow new users to sign up”** (las cuentas solo las crean administración y los decanos) y desactiva **“Confirm email”**.
-4. Despliega la función que crea las cuentas (necesita la [CLI de Supabase](https://supabase.com/docs/guides/cli)):
+4. Despliega la función que crea las cuentas, con **Verify JWT apagado** (desde el panel: *Edge Functions → Deploy a new function → Via Editor*, o con la [CLI de Supabase](https://supabase.com/docs/guides/cli)). Su nombre debe coincidir con `USERS_FN` en `src/data/supabaseApi.ts`:
    ```bash
    npx supabase login
    npx supabase link --project-ref TU_PROJECT_REF
-   npx supabase functions deploy manage-users
+   npx supabase functions deploy manage-users --no-verify-jwt
    ```
 5. **Primer administrador:** en **Authentication → Users → Add user** crea `admin@pp.local` con una contraseña fuerte y marca *Auto Confirm*. **El primer usuario que exista se convierte automáticamente en administrador.** Entra en la app con el usuario `admin`.
 6. **Project Settings → API**: copia la *Project URL* y la llave *anon public*.
