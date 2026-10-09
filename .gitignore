@@ -1,4 +1,12 @@
-# Datos de estudiantes: no publicar en GitHub Pages
+# Datos de estudiantes: nunca al repositorio
 *.xlsx
 *.xls
 *.csv
+
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+supabase/.temp/
+*.tsbuildinfo

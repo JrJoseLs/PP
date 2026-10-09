@@ -1,97 +1,26 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Comparador de Preparación Profesional</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2322261F'/%3E%3Crect x='7' y='16' width='4' height='9' fill='%23F4F1E8'/%3E%3Crect x='14' y='10' width='4' height='15' fill='%23B45737'/%3E%3Crect x='21' y='6' width='4' height='19' fill='%23F4F1E8'/%3E%3C/svg%3E">
-<script>
-  (function(){ var t=null; try{ t=JSON.parse(localStorage.getItem("pp_theme")||"null"); }catch(e){}
-    if(t!=="dark" && t!=="light") t = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
-    document.documentElement.setAttribute("data-theme", t); })();
-</script>
-<link rel="stylesheet" href="css/estilos.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Competencias</title>
+  <meta name="description" content="Compara competencias por clase, maestro, carrera y estudiante." />
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%230a84ff'/%3E%3Cstop offset='1' stop-color='%23bf5af2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M16 6l9 6.5-3.4 10.5H10.4L7 12.5z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    (function () {
+      var p = "system"; try { p = JSON.parse(localStorage.getItem("pp_theme") || '"system"'); } catch (e) {}
+      var dark = p === "dark" || (p !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    })();
+  </script>
 </head>
 <body>
-<div class="grain"></div>
-
-<!-- ============ Acceso ============ -->
-<div id="gate">
-  <button class="theme-btn" type="button" data-theme-toggle aria-label="Cambiar tema" title="Cambiar a tema oscuro">
-      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>
-    </button>
-  <form class="box" id="gateForm" autocomplete="on">
-    <span class="lock-icon">&#128274;</span>
-    <h2>Acceso privado</h2>
-    <p>Comparador de Preparación Profesional.<br>Ingresa tu usuario y contraseña.</p>
-    <input class="input" type="text" id="gateUser" placeholder="Usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
-    <input class="input" type="password" id="gatePassword" placeholder="Contraseña" autocomplete="current-password">
-    <button class="btn" type="submit" id="gateSubmit">Entrar</button>
-    <div class="err" id="gateErr" role="alert"></div>
-    <div class="gate-note" id="gateNote"></div>
-  </form>
-</div>
-
-<!-- ============ App ============ -->
-<header class="gated" id="appHeader">
-  <div>
-    <div class="eyebrow">Comparador de Preparación Profesional</div>
-    <h1>Estudiantes · clases · carreras</h1>
-  </div>
-  <div class="userbox">
-    <button class="theme-btn" type="button" data-theme-toggle aria-label="Cambiar tema" title="Cambiar a tema oscuro">
-      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>
-    </button>
-    <span id="userName"></span>
-    <span class="role-badge" id="userRole"></span>
-    <button class="link" id="logoutBtn" type="button">Cerrar sesión</button>
-  </div>
-</header>
-
-<main class="gated" id="appMain">
-  <aside class="sidebar">
-    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Cargar archivos">
-      <span class="icon">&#128194;</span>
-      <div class="main-txt" id="dropMain">Cargar archivos</div>
-      <div class="sub-txt">Arrastra aquí o haz clic &middot; .xlsx / .xls / .csv<br>
-        Informes del juego y listados de estudiantes. El tipo se detecta solo.</div>
-      <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv">
-    </div>
-
-    <div id="rosterBox"></div>
-
-    <div class="side-label" id="classesLabel">Juegos / clases</div>
-    <div id="classList"></div>
-
-    <div id="dataTools">
-    <div class="side-label" style="margin-bottom:8px;">Espacio de trabajo</div>
-    <div class="side-actions">
-      <button class="btn ghost small" id="backupExport" type="button" title="Copia completa de tu trabajo (incluye el listado de estudiantes, sin cifrar). Úsala para pasar tu trabajo a otra computadora.">Exportar respaldo</button>
-      <button class="btn ghost small" id="backupImport" type="button" title="Carga una copia exportada desde otra computadora. Se suma a lo que ya tienes.">Importar respaldo</button>
-      <button class="btn danger small" id="clearDataBtn" type="button">Borrar todo</button>
-      <input type="file" id="backupFile" accept=".json,application/json">
-    </div>
-    </div>
-  </aside>
-
-  <section class="content">
-    <div id="previewBar"></div>
-    <div id="publishBanner"></div>
-    <nav class="tabs" id="tabs" role="tablist"></nav>
-    <div class="panel" id="panel-resumen"></div>
-    <div class="panel" id="panel-carreras"></div>
-    <div class="panel" id="panel-comparar"></div>
-    <div class="panel" id="panel-perfil"></div>
-    <div class="panel" id="panel-tabla"></div>
-    <div class="panel" id="panel-usuarios"></div>
-  </section>
-</main>
-
-<div id="toasts" aria-live="polite"></div>
-
-<script src="js/xlsx.full.min.js"></script>
-<script src="js/app.js"></script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
