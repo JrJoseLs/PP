@@ -39,11 +39,20 @@ export function Icon({ name, size = 20, className }: { name: keyof typeof P | st
   );
 }
 
+/** Letra oscura sobre colores claros (amarillo, celeste…) y blanca sobre los oscuros */
+export function inkOn(bg: string) {
+  const m = /^#([0-9a-f]{6})$/i.exec(bg.trim());
+  if (!m) return "#fff";
+  const n = parseInt(m[1], 16), ch = [n >> 16, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  const L = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  return L > 0.3 ? "#1d1d1f" : "#fff";
+}
+
 const AV_COLORS = ["#0a84ff", "#ff9f0a", "#30d158", "#ff375f", "#bf5af2", "#64d2ff", "#5e5ce6", "#ac8e68"];
 export function Avatar({ name, size = 32, color }: { name: string; size?: number; color?: string }) {
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) | 0;
   const bg = color ?? AV_COLORS[Math.abs(h) % AV_COLORS.length];
-  return <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.38, background: bg }}>{initials(name.replace(/^(Dra?|Mtro|Mtra|Lic|Ing)\.\s*/i, ""))}</span>;
+  return <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.38, background: bg, color: inkOn(bg) }}>{initials(name.replace(/^(Dra?|Mtro|Mtra|Lic|Ing)\.\s*/i, ""))}</span>;
 }
 
 export function Segmented<T extends string>({ value, options, onChange, size }: {
