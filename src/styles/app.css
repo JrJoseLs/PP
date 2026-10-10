@@ -48,6 +48,7 @@ body {
   transition: background .3s var(--ease), color .3s var(--ease);
 }
 body.noscroll { overflow: hidden; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .35s; animation-timing-function: ease; }
 h1, h2, h3, h4 { font-family: var(--font-d); margin: 0; letter-spacing: -.022em; }
 h1 { font-size: 34px; font-weight: 700; line-height: 1.12; }
 h2 { font-size: 24px; font-weight: 700; }

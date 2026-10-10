@@ -12,7 +12,12 @@ function resolved(p: ThemePref) {
 }
 export function applyTheme(p: ThemePref) {
   try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* */ }
-  document.documentElement.setAttribute("data-theme", resolved(p));
+  const swap = () => document.documentElement.setAttribute("data-theme", resolved(p));
+  // fundido de toda la página a la vez (si el navegador lo admite), en vez de cambios a saltos
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (doc.startViewTransition && !calm && document.documentElement.getAttribute("data-theme") !== resolved(p)) doc.startViewTransition(swap);
+  else swap();
   window.dispatchEvent(new Event("pp-theme"));
 }
 export function useTheme(): [ThemePref, (p: ThemePref) => void, "light" | "dark"] {

@@ -51,7 +51,7 @@ export default function Backdrop3D() {
       const line = new Line(lgeo, new LineBasicMaterial({ color, transparent: true, opacity: 0.85 }));
       fill.position.z = line.position.z = z;
       web.add(fill, line);
-      return { pos, lpos, geo, lgeo };
+      return { pos, lpos, geo, lgeo, mats: [fill.material as MeshBasicMaterial, line.material as LineBasicMaterial] };
     };
     const shapes = [mkShape(accent, 0.13, 0.02), mkShape(accent2, 0.09, 0.04)];
     const seeds = shapes.map((_, s) => Array.from({ length: N }, (_, i) => 0.45 + 0.35 * Math.abs(Math.sin(i * 1.7 + s * 2.3))));
@@ -62,6 +62,19 @@ export default function Backdrop3D() {
     const pgeo = new BufferGeometry(); pgeo.setAttribute("position", new BufferAttribute(ppos, 3));
     const points = new Points(pgeo, new PointsMaterial({ color: accent, size: 0.035, transparent: true, opacity: 0.55, sizeAttenuation: true }));
     scene.add(points);
+
+    // Los colores salen del tema (claro u oscuro): se vuelven a leer cuando el tema cambia
+    const themed: [{ color: Color }, string][] = [
+      [lineMat, "--text-3"], [shapes[0].mats[0], "--accent"], [shapes[0].mats[1], "--accent"],
+      [shapes[1].mats[0], "--accent-2"], [shapes[1].mats[1], "--accent-2"], [points.material as PointsMaterial, "--accent"],
+    ];
+    const recolor = () => {
+      const cs = getComputedStyle(document.documentElement);
+      themed.forEach(([m, v]) => { const c = cs.getPropertyValue(v).trim(); if (c) m.color.set(c); });
+      if (reduce) renderer.render(scene, camera);
+    };
+    const themeObs = new MutationObserver(recolor);
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
     const resize = () => {
       const w = el.clientWidth, h = el.clientHeight;
@@ -100,7 +113,7 @@ export default function Backdrop3D() {
     document.addEventListener("visibilitychange", vis);
 
     return () => {
-      running = false; cancelAnimationFrame(raf); ro.disconnect();
+      running = false; cancelAnimationFrame(raf); ro.disconnect(); themeObs.disconnect();
       window.removeEventListener("pointermove", onMove); document.removeEventListener("visibilitychange", vis);
       scene.traverse((o) => { const m = o as Mesh; m.geometry?.dispose(); (m.material as Material | undefined)?.dispose?.(); });
       renderer.dispose(); renderer.domElement.remove();
