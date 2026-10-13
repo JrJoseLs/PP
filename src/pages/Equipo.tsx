@@ -4,7 +4,8 @@ import { useApp } from "../data/store";
 import { Avatar, Empty, Icon, Modal, Segmented } from "../components/ui";
 import { LevelBar } from "../components/Charts";
 import { avgIndex, fmt, plural } from "../lib/metrics";
-import { ROL_LABEL, type Profile, type Rol } from "../lib/types";
+import type { Profile, Rol } from "../lib/types";
+import { D, M, low, rolLabel } from "../lib/labels";
 import { PageHead } from "./Dashboard";
 import { downloadAccountsTemplate, downloadCredentials, parseAccounts, type AccountRow } from "../lib/templates";
 
@@ -25,13 +26,13 @@ export default function Equipo() {
   return (
     <>
       <PageHead title="Equipo"
-        sub={rol === "admin" ? "Crea cuentas, organiza maestros por decano y decide quién ve cada clase." : "Tus maestros y las clases que les asignas. Cada maestro ve solo sus clases."}
+        sub={rol === "admin" ? `Crea cuentas, organiza a cada ${low(M().one)} bajo su ${low(D().one)} y decide quién ve cada clase.` : `Tus ${low(M().many)} y las clases que les asignas. Cada uno ve solo sus clases.`}
         actions={<>
           <button className="btn" onClick={() => setBulk(true)}><Icon name="upload" size={16} /> Importar cuentas</button>
-          <button className="btn primary" onClick={() => { setNewFor(null); setEditing("new"); }}><Icon name="plus" size={16} /> {rol === "admin" ? "Nueva cuenta" : "Nuevo maestro"}</button>
+          <button className="btn primary" onClick={() => { setNewFor(null); setEditing("new"); }}><Icon name="plus" size={16} /> {rol === "admin" ? "Nueva cuenta" : `Nuevo ${low(M().one)}`}</button>
         </>} />
       <div className="toolbar">
-        <Segmented value={tab} onChange={setTab} options={[{ value: "org", label: rol === "admin" ? "Organización" : "Mis maestros" }, { value: "clases", label: "Acceso a clases" }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ value: "org", label: rol === "admin" ? "Organización" : `Mis ${low(M().many)}` }, { value: "clases", label: "Acceso a clases" }]} />
       </div>
       {tab === "org" ? (rol === "admin" ? <OrgAdmin onEdit={setEditing} onNew={(d) => { setNewFor(d); setEditing("new"); }} /> : <OrgDecano onEdit={setEditing} />)
         : <Matrix />}
@@ -55,7 +56,7 @@ function OrgAdmin({ onEdit, onNew }: { onEdit(p: Profile): void; onNew(decanoId:
     const id = e.dataTransfer.getData("text/maestro");
     const m = snap.profiles.find((p) => p.id === id);
     const dec = target === "none" ? null : target;
-    if (m && m.decano_id !== dec) run((a) => a.updateProfile(id, { decano_id: dec }), `${m.nombre} → ${dec ? snap.profiles.find((p) => p.id === dec)?.nombre : "sin decano"}`);
+    if (m && m.decano_id !== dec) run((a) => a.updateProfile(id, { decano_id: dec }), `${m.nombre} → ${dec ? snap.profiles.find((p) => p.id === dec)?.nombre : "sin " + low(D().one)}`);
   };
 
   return (
@@ -64,7 +65,7 @@ function OrgAdmin({ onEdit, onNew }: { onEdit(p: Profile): void; onNew(decanoId:
         <span className="muted small">Administración</span>
         {admins.map((a) => <button key={a.id} className="pchip" onClick={() => onEdit(a)}><Avatar name={a.nombre} size={22} /><span>{a.nombre}</span></button>)}
       </div>
-      <p className="muted small hint"><Icon name="spark" size={14} /> Arrastra un maestro a otra columna para cambiarlo de decano.</p>
+      <p className="muted small hint"><Icon name="spark" size={14} /> Arrastra a un {low(M().one)} a otra columna para cambiarlo de {low(D().one)}.</p>
       <div className="org">
         {cols.map(({ id, d }) => {
           const ms = snap.profiles.filter((p) => p.rol === "maestro" && (d ? p.decano_id === d.id : !p.decano_id));
@@ -77,20 +78,20 @@ function OrgAdmin({ onEdit, onNew }: { onEdit(p: Profile): void; onNew(decanoId:
               {d ? (
                 <button className="org-head" onClick={() => onEdit(d)}>
                   <Avatar name={d.nombre} size={40} />
-                  <span className="rank-txt"><b>{d.nombre}</b><small>{plural(clsIds.length, "clase", "clases")} · {plural(ms.length, "maestro", "maestros")}{!d.activo ? " · inactivo" : ""}</small></span>
+                  <span className="rank-txt"><b>{d.nombre}</b><small>{plural(clsIds.length, "clase", "clases")} · {plural(ms.length, low(M().one), low(M().many))}{!d.activo ? " · inactivo" : ""}</small></span>
                   <span className="org-idx">{fmt(avgIndex(rr))}</span>
                 </button>
-              ) : <div className="org-head plain"><span className="rank-txt"><b>Sin decano</b><small>Maestros sin asignar</small></span></div>}
+              ) : <div className="org-head plain"><span className="rank-txt"><b>Sin {low(D().one)}</b><small>{M().many} sin asignar</small></span></div>}
               {d && <LevelBar rows={rr} />}
               <div className="org-list">
                 {ms.map((m) => <MaestroCard key={m.id} m={m} onEdit={() => onEdit(m)} draggable />)}
-                {!ms.length && <p className="muted small">Suelta aquí un maestro.</p>}
+                {!ms.length && <p className="muted small">Suelta aquí a un {low(M().one)}.</p>}
               </div>
-              {d && <button className="btn ghost sm full" onClick={() => onNew(d.id)}><Icon name="plus" size={14} /> Maestro</button>}
+              {d && <button className="btn ghost sm full" onClick={() => onNew(d.id)}><Icon name="plus" size={14} /> {M().one}</button>}
             </section>
           );
         })}
-        {!decanos.length && <Empty icon="team" title="Aún no hay decanos">Crea una cuenta con rol Decano para empezar a repartir las clases.</Empty>}
+        {!decanos.length && <Empty icon="team" title={`Aún no hay ${low(D().many)}`}>Crea una cuenta con rol {D().one} para empezar a repartir las clases.</Empty>}
       </div>
     </>
   );
@@ -116,7 +117,7 @@ function MaestroCard({ m, onEdit, draggable }: { m: Profile; onEdit(): void; dra
 function OrgDecano({ onEdit }: { onEdit(p: Profile): void }) {
   const { snap, user, rowsByClase } = useApp();
   const ms = snap.profiles.filter((p) => p.rol === "maestro" && p.decano_id === user!.id);
-  if (!ms.length) return <Empty icon="team" title="Aún no tienes maestros">Crea las cuentas de tus maestros con “Nuevo maestro”. Luego, en “Acceso a clases”, decide qué clase ve cada uno.</Empty>;
+  if (!ms.length) return <Empty icon="team" title={`Aún no tienes ${low(M().many)}`}>Crea sus cuentas con “Nuevo {low(M().one)}”. Luego, en “Acceso a clases”, decide qué clase ve cada uno.</Empty>;
   return (
     <div className="mgrid">
       {ms.map((m) => {
@@ -158,12 +159,12 @@ function Matrix() {
 
   return (
     <>
-      {rol === "admin" && <div className="toolbar"><Segmented size="sm" value={who} onChange={setWho} options={[{ value: "decanos", label: "Clases → Decanos" }, { value: "maestros", label: "Clases → Maestros" }]} /></div>}
+      {rol === "admin" && <div className="toolbar"><Segmented size="sm" value={who} onChange={setWho} options={[{ value: "decanos", label: `Clases → ${D().many}` }, { value: "maestros", label: `Clases → ${M().many}` }]} /></div>}
       <p className="muted small hint">
-        {who === "decanos" ? "Cada decano verá solo las clases marcadas en su columna, y podrá entregarlas a sus maestros."
-          : rol === "decano" ? "Marca qué clase ve cada uno de tus maestros. Ellos no ven nada más." : "Normalmente lo hace cada decano, pero como administración también puedes hacerlo."}
+        {who === "decanos" ? `Cada ${low(D().one)} verá solo las clases marcadas en su columna, y podrá entregarlas a sus ${low(M().many)}.`
+          : rol === "decano" ? `Marca qué clase ve cada uno de tus ${low(M().many)}. No ven nada más.` : `Normalmente lo hace cada ${low(D().one)}, pero como administración también puedes hacerlo.`}
       </p>
-      {!people.length ? <Empty icon="team" title={who === "decanos" ? "No hay decanos" : "No hay maestros"} /> : (
+      {!people.length ? <Empty icon="team" title={`No hay ${low((who === "decanos" ? D() : M()).many)}`} /> : (
         <div className="card table-card">
           <div className="table-scroll">
             <table className="matrix">
@@ -240,7 +241,7 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
   );
 
   return (
-    <Modal open title={p ? "Editar cuenta" : isAdmin ? "Nueva cuenta" : "Nuevo maestro"} onClose={onClose}>
+    <Modal open title={p ? "Editar cuenta" : isAdmin ? "Nueva cuenta" : `Nuevo ${low(M().one)}`} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         <label className="field"><span>Nombre completo</span><input value={f.nombre} required placeholder="Ej. Laura Silva"
           onChange={(e) => setF({ ...f, nombre: e.target.value, usuario: touchedUser ? f.usuario : slug(e.target.value) })} /></label>
@@ -251,12 +252,12 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
             <button type="button" className="btn sm" onClick={() => setF({ ...f, password: genPass() })} title="Generar"><Icon name="key" size={14} /></button></span></label>
         {isAdmin && !self && (
           <div className="field"><span>Rol</span>
-            <Segmented value={f.rol} onChange={(v) => setF({ ...f, rol: v })} options={(["admin", "decano", "maestro"] as Rol[]).map((r) => ({ value: r, label: ROL_LABEL[r] }))} /></div>
+            <Segmented value={f.rol} onChange={(v) => setF({ ...f, rol: v })} options={(["admin", "decano", "maestro"] as Rol[]).map((r) => ({ value: r, label: rolLabel(r) }))} /></div>
         )}
         {isAdmin && f.rol === "maestro" && (
-          <label className="field"><span>Decano a cargo</span>
+          <label className="field"><span>{D().one} a cargo</span>
             <select value={f.decano_id ?? ""} onChange={(e) => setF({ ...f, decano_id: e.target.value || null })}>
-              <option value="">Sin decano</option>{decanos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              <option value="">Sin {low(D().one)}</option>{decanos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
             </select></label>
         )}
         {p && !self && <label className="switch-label"><input type="checkbox" className="switch" checked={f.activo} onChange={(e) => setF({ ...f, activo: e.target.checked })} /> Cuenta activa</label>}
@@ -294,7 +295,7 @@ function BulkAccounts({ onClose }: { onClose(): void }) {
         if (!isAdmin) { r.decano_id = user!.id; return; }
         if (!r.decano) { r.decano_id = null; return; }
         const d = decanos.find((x) => x.usuario === r.decano || x.nombre.toLowerCase() === r.decano);
-        if (d) r.decano_id = d.id; else if (!fileDec.has(r.decano)) r.error = `Decano «${r.decano}» no encontrado`;
+        if (d) r.decano_id = d.id; else if (!fileDec.has(r.decano)) r.error = `${D().one} «${r.decano}» no encontrado`;
       });
       setRows(list);
       if (!list.length) toast("El archivo no tiene filas para crear (las de EJEMPLO se ignoran).", "error");
@@ -323,9 +324,9 @@ function BulkAccounts({ onClose }: { onClose(): void }) {
 
   const valid = rows?.filter((r) => !r.error).length ?? 0;
   return (
-    <Modal open title={isAdmin ? "Importar cuentas" : "Importar maestros"} onClose={onClose}>
+    <Modal open title={isAdmin ? "Importar cuentas" : `Importar ${low(M().many)}`} onClose={onClose}>
       {!rows && <>
-        <p className="muted">Descarga la plantilla, escribe una fila por persona y súbela. {isAdmin ? "Puedes crear decanos y sus maestros en el mismo archivo." : "Todos quedarán como tus maestros."}</p>
+        <p className="muted">Descarga la plantilla, escribe una fila por persona y súbela. {isAdmin ? `Puedes crear ${low(D().many)} y sus ${low(M().many)} en el mismo archivo.` : `Todos quedarán como tus ${low(M().many)}.`}</p>
         <div className="bulk-actions">
           <button className="btn" onClick={() => downloadAccountsTemplate(isAdmin, decanos)}><Icon name="download" size={16} /> Descargar plantilla</button>
           <label className="btn primary"><Icon name="upload" size={16} /> Subir Excel
@@ -338,7 +339,7 @@ function BulkAccounts({ onClose }: { onClose(): void }) {
             {rows.map((r) => (
               <div key={r.fila} className={"bulk-row" + (r.error ? " bad" : done?.includes(r) ? " ok" : "")}>
                 <Avatar name={r.nombre} size={28} />
-                <span className="rank-txt"><b>{r.nombre}</b><small>@{r.usuario} · {ROL_LABEL[r.rol]}{r.rol === "maestro" && isAdmin && r.decano ? " · " + r.decano : ""}</small></span>
+                <span className="rank-txt"><b>{r.nombre}</b><small>@{r.usuario} · {rolLabel(r.rol)}{r.rol === "maestro" && isAdmin && r.decano ? " · " + r.decano : ""}</small></span>
                 <span className="small">{r.error ? <span className="neg">{r.error}</span> : done?.includes(r) ? <span className="pos">Creada</span> : <span className="muted">Lista</span>}</span>
               </div>
             ))}

@@ -9,6 +9,7 @@ import { downloadReportTemplate, downloadRosterTemplate } from "../lib/templates
 import type { ClaseDraft, RosterEntry } from "../lib/types";
 import { PALETTE } from "../data/demoSeed";
 import { PageHead } from "./Dashboard";
+import { D, M, low } from "../lib/labels";
 import { friendlyError } from "../data/api";
 
 interface Draft extends ClaseDraft { key: string; replaceId: string; }
@@ -116,7 +117,7 @@ export default function Importar() {
           <button className="tpl" onClick={() => downloadRosterTemplate()}>
             <span className="tpl-ico xl">XLS</span><span className="rank-txt"><b>Listado de estudiantes</b><small>Matrícula, nombre, carrera y grupo</small></span><Icon name="download" size={16} /></button>
           <button className="tpl" onClick={() => go("/equipo?importar=1")}>
-            <span className="tpl-ico xl alt">XLS</span><span className="rank-txt"><b>Cuentas de usuario</b><small>Crear decanos y maestros en bloque</small></span><Icon name="chevron" size={16} /></button>
+            <span className="tpl-ico xl alt">XLS</span><span className="rank-txt"><b>Cuentas de usuario</b><small>Crear {low(D().many)} y {low(M().many)} en bloque</small></span><Icon name="chevron" size={16} /></button>
         </div>
         <p className="muted tiny">¿Quieres corregir una clase ya cargada? Ábrela y usa <b>Descargar Excel</b>: sale en este mismo formato, listo para editar y volver a subir.</p>
       </section>
@@ -135,8 +136,8 @@ export default function Importar() {
           <ol className="steps">
             <li className={roster.length ? "done" : ""}>Sube el listado (opcional)</li>
             <li className={drafts.length ? "done" : ""}>Sube los informes, uno por clase</li>
-            <li>Ponle nombre y elige su decano</li>
-            <li>Guarda. El decano la entregará a sus maestros</li>
+            <li>Ponle nombre y elige su {low(D().one)}</li>
+            <li>Guarda. Su {low(D().one)} la entregará a sus {low(M().many)}</li>
           </ol>
         </div>
       </div>
@@ -169,11 +170,11 @@ export default function Importar() {
                   </label>
                   {d.replaceId ? <p className="note small">Se sustituyen los estudiantes y valores de «{snap.clases.find((c) => c.id === d.replaceId)?.nombre}». Se conservan su nombre, color y quién tiene acceso.</p> : (
                   <div className="chips">
-                    <span className="muted small">Decano:</span>
+                    <span className="muted small">{D().one}:</span>
                     {decanos.map((p) => { const on = d.decanos.includes(p.id); return (
                       <button type="button" key={p.id} className={"pchip" + (on ? " on" : "")} onClick={() => upd(d.key, { decanos: on ? d.decanos.filter((x) => x !== p.id) : [...d.decanos, p.id] })}>
                         <Avatar name={p.nombre} size={20} /><span>{p.nombre}</span>{on && <Icon name="check" size={13} />}</button>); })}
-                    {!decanos.length && <span className="muted small">Aún no hay decanos (puedes asignarla después).</span>}
+                    {!decanos.length && <span className="muted small">Aún no hay {low(D().many)} (puedes asignarla después).</span>}
                   </div>)}
                 </div>
                 <button className="icon-btn draft-x" onClick={() => setDrafts((ds) => ds.filter((x) => x.key !== d.key))} aria-label="Descartar"><Icon name="close" /></button>

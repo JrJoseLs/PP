@@ -64,7 +64,7 @@ export class DemoApi implements Api {
       maestros: u.rol === "maestro" ? c.maestros.filter((m) => m === u.id) : c.maestros,
     })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
     const ids = new Set(clases.map((c) => c.id));
-    return { profiles, clases, resultados: this.db.resultados.filter((r) => ids.has(r.clase_id)), carreras: this.db.carreras };
+    return { profiles, clases, resultados: this.db.resultados.filter((r) => ids.has(r.clase_id)), carreras: this.db.carreras, ajustes: this.db.ajustes ?? {} };
   }
 
   async createUser(n: NewUser) {
@@ -164,6 +164,12 @@ export class DemoApi implements Api {
     if (!this.isAdmin()) deny();
     const r = this.db.resultados.find((x) => x.id === id); if (!r) throw new Error("Resultado no encontrado");
     Object.assign(r, patch); this.save();
+  }
+  async setAjuste(clave: string, valor: unknown) {
+    await wait(80);
+    if (!this.isAdmin()) deny();
+    this.db.ajustes = { ...(this.db.ajustes ?? {}), [clave]: valor };
+    this.save();
   }
   async upsertCarreras(list: Carrera[]) {
     await wait(60);

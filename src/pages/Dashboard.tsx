@@ -10,6 +10,8 @@ import { byClase, byDecano, byMaestro, summarize, type Group } from "../lib/grou
 
 function greeting() { const h = new Date().getHours(); return h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches"; }
 
+import { D, low, M, metricName } from "../lib/labels";
+
 export default function Dashboard() {
   const { user, snap, rows, rowsByClase, metrics, ready } = useApp();
   const { openStudent } = useShell();
@@ -39,10 +41,10 @@ export default function Dashboard() {
     <>
       <PageHead eyebrow={today} title={`${greeting()}, ${first}`} />
       <Empty icon="classes" title={rol === "admin" ? "Empieza importando tus clases" : "Aún no tienes clases"}>
-        {rol === "admin" ? <><p>Sube los informes del juego (Excel) y el listado de estudiantes. Después entrega cada clase a su decano.</p>
+        {rol === "admin" ? <><p>Sube los informes del juego (Excel) y el listado de estudiantes. Después entrega cada clase a su {low(D().one)}.</p>
           <Link className="btn primary" to="/importar"><Icon name="upload" size={16} /> Importar clases</Link></>
-          : rol === "decano" ? <p>Administración todavía no te ha entregado clases. Cuando lo haga, aparecerán aquí y podrás asignarlas a tus maestros.</p>
-          : <p>Tu decano todavía no te ha asignado clases. Cuando lo haga, aparecerán aquí automáticamente.</p>}
+          : rol === "decano" ? <p>Administración todavía no te ha entregado clases. Cuando lo haga, aparecerán aquí y podrás asignarlas a tus {low(M().many)}.</p>
+          : <p>Todavía no tienes clases asignadas. Cuando te asignen una, aparecerá aquí automáticamente.</p>}
       </Empty>
     </>
   );
@@ -57,8 +59,8 @@ export default function Dashboard() {
   const series: Series[] = radarGroups.map((g) => ({ name: g.label, color: g.color, values: pick(g.vector) }));
   if (view !== "total" && radarGroups.length > 1) series.push({ name: "Promedio general", color: "var(--text-3)", values: pick(d.overall), dash: true, muted: true });
   const scopeTxt = [plural(snap.clases.length, "clase", "clases"),
-    rol !== "maestro" && plural(snap.profiles.filter((p) => p.rol === "maestro").length, "maestro", "maestros"),
-    rol === "admin" && plural(snap.profiles.filter((p) => p.rol === "decano").length, "decano", "decanos"),
+    rol !== "maestro" && plural(snap.profiles.filter((p) => p.rol === "maestro").length, low(M().one), low(M().many)),
+    rol === "admin" && plural(snap.profiles.filter((p) => p.rol === "decano").length, low(D().one), low(D().many)),
     plural(rows.length, "estudiante", "estudiantes")].filter(Boolean).join(" · ");
 
   return (
@@ -78,8 +80,8 @@ export default function Dashboard() {
             <h3>Huella de competencias</h3>
             <Segmented size="sm" value={view} onChange={setView} options={[
               { value: "clase", label: "Clases" },
-              ...(rol !== "maestro" ? [{ value: "maestro" as const, label: "Maestros" }] : []),
-              ...(rol === "admin" ? [{ value: "decano" as const, label: "Decanos" }] : []),
+              ...(rol !== "maestro" ? [{ value: "maestro" as const, label: M().many }] : []),
+              ...(rol === "admin" ? [{ value: "decano" as const, label: D().many }] : []),
               { value: "total", label: "General" },
             ]} />
           </div>
@@ -103,13 +105,13 @@ export default function Dashboard() {
 
       <div className="grid2">
         <RankCard title="Clases" items={d.classes} onPick={(g) => go("/clases/" + g.id.split(":")[1])} />
-        {rol !== "maestro" ? <RankCard title="Maestros" items={d.maestros} avatar empty="Aún no hay maestros con clases asignadas."
+        {rol !== "maestro" ? <RankCard title={M().many} items={d.maestros} avatar empty={`Aún no hay ${low(M().many)} con clases asignadas.`}
           onPick={(g) => go("/comparar?add=" + encodeURIComponent(g.id))} />
           : <AttentionCard rows={d.attention} onPick={(r) => openStudent(r.r.id, d.attention.map((x) => x.r.id))} />}
       </div>
       {rol === "admin" && d.decanos.length > 0 && (
         <div className="grid2">
-          <RankCard title="Decanos" items={d.decanos} avatar onPick={(g) => go("/comparar?add=" + encodeURIComponent(g.id))} />
+          <RankCard title={D().many} items={d.decanos} avatar onPick={(g) => go("/comparar?add=" + encodeURIComponent(g.id))} />
           <AttentionCard rows={d.attention} onPick={(r) => openStudent(r.r.id, d.attention.map((x) => x.r.id))} />
         </div>
       )}
@@ -183,11 +185,11 @@ function buildInsights(d: { classes: Sum[]; maestros: Sum[]; overall: (number | 
   const cls = d.classes.filter((c) => c.indice !== null);
   if (rol === "admin") {
     const noDec = snap.clases.filter((c) => !c.decanos.length).length;
-    if (noDec) out.push({ tone: "warn", text: <><b>{plural(noDec, "clase", "clases")}</b> sin decano: nadie más que tú puede verlas.</>, to: "/equipo?tab=clases", cta: "Asignar" });
+    if (noDec) out.push({ tone: "warn", text: <><b>{plural(noDec, "clase", "clases")}</b> sin {low(D().one)}: nadie más que tú puede verlas.</>, to: "/equipo?tab=clases", cta: "Asignar" });
   }
   if (rol !== "maestro") {
     const noM = snap.clases.filter((c) => !c.maestros.length);
-    if (noM.length) out.push({ tone: "warn", text: <><b>{noM.length === 1 ? noM[0].nombre : plural(noM.length, "clase", "clases")}</b> {noM.length === 1 ? "no tiene" : "no tienen"} maestro asignado.</>, to: "/equipo?tab=clases", cta: "Asignar" });
+    if (noM.length) out.push({ tone: "warn", text: <><b>{noM.length === 1 ? noM[0].nombre : plural(noM.length, "clase", "clases")}</b> {noM.length === 1 ? "no tiene" : "no tienen"} {low(M().one)} asignado.</>, to: "/equipo?tab=clases", cta: "Asignar" });
   }
   if (cls.length > 1) {
     const s = [...cls].sort((a, b) => b.indice! - a.indice!);
@@ -203,15 +205,15 @@ function buildInsights(d: { classes: Sum[]; maestros: Sum[]; overall: (number | 
       if (!best || gap > best.gap) best = { m, gap, hi: isRisk(m) ? lo : hi, lo: isRisk(m) ? hi : lo };
     });
     if (best) { const b = best as { m: string; gap: number; hi: Sum; lo: Sum };
-      out.push({ tone: "info", text: <>La mayor brecha está en <b>{b.m}</b>: {fmt(b.gap)} puntos entre <b>{b.hi.label}</b> y <b>{b.lo.label}</b>.</> }); }
+      out.push({ tone: "info", text: <>La mayor brecha está en <b>{metricName(b.m)}</b>: {fmt(b.gap)} puntos entre <b>{b.hi.label}</b> y <b>{b.lo.label}</b>.</> }); }
   }
   const pos = metrics.map((m, i) => ({ m, v: d.overall[i] })).filter((x) => x.v !== null && !isRisk(x.m) && !d.sparse.has(x.m)).sort((a, b) => b.v! - a.v!);
   if (pos.length > 1) {
-    out.push({ tone: "good", text: <>Fortaleza general: <b>{pos[0].m}</b> ({fmt(pos[0].v)}).</> });
-    out.push({ tone: "bad", text: <>Lo más débil: <b>{pos[pos.length - 1].m}</b> ({fmt(pos[pos.length - 1].v)}). Buen foco para la próxima sesión.</> });
+    out.push({ tone: "good", text: <>Fortaleza general: <b>{metricName(pos[0].m)}</b> ({fmt(pos[0].v)}).</> });
+    out.push({ tone: "bad", text: <>Lo más débil: <b>{metricName(pos[pos.length - 1].m)}</b> ({fmt(pos[pos.length - 1].v)}). Buen foco para la próxima sesión.</> });
   }
   const risk = metrics.map((m, i) => ({ m, v: d.overall[i] })).filter((x) => x.v !== null && isRisk(x.m) && !d.sparse.has(x.m)).sort((a, b) => b.v! - a.v!);
-  if (risk[0] && risk[0].v! >= 35) out.push({ tone: "warn", text: <>Riesgo más alto: <b>{risk[0].m}</b> en {fmt(risk[0].v)} (aquí menos es mejor).</> });
+  if (risk[0] && risk[0].v! >= 35) out.push({ tone: "warn", text: <>Riesgo más alto: <b>{metricName(risk[0].m)}</b> en {fmt(risk[0].v)} (aquí menos es mejor).</> });
   if (rol !== "maestro" && d.maestros.length > 1) {
     const att = [...d.maestros].sort((a, b) => b.levels.bajo / (b.levels.total || 1) - a.levels.bajo / (a.levels.total || 1))[0];
     if (att && att.levels.bajo) out.push({ tone: "info", text: <>El grupo de <b>{att.label}</b> concentra la mayor proporción en nivel bajo ({Math.round((att.levels.bajo / (att.levels.total || 1)) * 100)}%).</>, to: `/comparar?add=${encodeURIComponent(att.id)}`, cta: "Analizar" });

@@ -5,6 +5,7 @@ import { useShell } from "../components/Layout";
 import { Avatar, Empty, Icon, LevelChip, Segmented, Select } from "../components/ui";
 import { displayName, fmt, isRisk, levelOf, metricLevel, metricValue, normText, plural, sparseMetrics, type Row } from "../lib/metrics";
 import { PageHead } from "./Dashboard";
+import { metricDesc, metricName } from "../lib/labels";
 
 const PAGE = 100;
 
@@ -42,7 +43,7 @@ export default function Estudiantes() {
     const XLSX = await import("xlsx");
     const data = list.map((r) => {
       const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "" };
-      metrics.forEach((m) => { o[m] = metricValue(r, m); });
+      metrics.forEach((m) => { o[metricName(m)] = metricValue(r, m); });
       return o;
     });
     const wb = XLSX.utils.book_new();
@@ -72,7 +73,7 @@ export default function Estudiantes() {
             <thead><tr>
               {th("nombre", "Estudiante", "sticky")}
               {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th>{th("indice", "Índice", "num")}<th>Nivel</th></>
-                : <>{th("indice", "Índice", "num")}{cols.map((m) => <th key={m} className="vert" title={m}><button className={"th" + (sort.k === m ? " on" : "")} onClick={() => setSort({ k: m, dir: sort.k === m ? (-sort.dir as 1 | -1) : -1 })}><span>{m}{isRisk(m) ? " ↓" : ""}</span></button></th>)}</>}
+                : <>{th("indice", "Índice", "num")}{cols.map((m) => <th key={m} className="vert" title={metricName(m) + (metricDesc(m) ? " · " + metricDesc(m) : "")}><button className={"th" + (sort.k === m ? " on" : "")} onClick={() => setSort({ k: m, dir: sort.k === m ? (-sort.dir as 1 | -1) : -1 })}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></button></th>)}</>}
             </tr></thead>
             <tbody>
               {list.slice(0, limit).map((r) => (

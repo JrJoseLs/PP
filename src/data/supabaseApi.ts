@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Api } from "./api";
-import type { Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, RosterEntry, Snapshot } from "../lib/types";
+import type { Ajustes, Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, RosterEntry, Snapshot } from "../lib/types";
 
 // Nombre de la Edge Function de cuentas en Supabase (ver supabase/functions/manage-users)
 const USERS_FN = "clever-action";
@@ -56,7 +56,7 @@ export class SupabaseApi implements Api {
       decanos: cd.filter((x) => x.clase_id === c.id).map((x) => x.decano_id),
       maestros: cm.filter((x) => x.clase_id === c.id).map((x) => x.maestro_id),
     })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
-    return { profiles, clases, resultados, carreras };
+    return { profiles, clases, resultados, carreras, ajustes: await this.loadAjustes() };
   }
 
   private async fn(body: Record<string, unknown>) {
@@ -108,6 +108,17 @@ export class SupabaseApi implements Api {
   async updateResultado(id: string, patch: Partial<Resultado>) {
     const { error } = await this.sb.from("resultados").update(patch).eq("id", id);
     if (error) throw error;
+  }
+  /** Si la tabla de ajustes aún no existe (falta 002_ajustes.sql), se usan los nombres por defecto */
+  private async loadAjustes(): Promise<Ajustes> {
+    const { data, error } = await this.sb.from("ajustes").select("clave,valor");
+    if (error) return {};
+    return Object.fromEntries((data ?? []).map((r: { clave: string; valor: unknown }) => [r.clave, r.valor]));
+  }
+  async setAjuste(clave: string, valor: unknown) {
+    const { error } = await this.sb.from("ajustes").upsert({ clave, valor, updated_at: new Date().toISOString() });
+    if (error) throw new Error(/ajustes/.test(error.message) && /exist|find|schema/i.test(error.message)
+      ? "Falta crear la tabla de ajustes: ejecuta supabase/migrations/002_ajustes.sql en el SQL Editor de Supabase." : error.message);
   }
   async upsertCarreras(list: Carrera[]) {
     const { error } = await this.sb.from("carreras").upsert(list);

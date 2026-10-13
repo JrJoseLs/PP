@@ -1,6 +1,6 @@
 /* Datos de ejemplo: 4 decanos, 16 maestros, 16 clases, ~400 estudiantes.
    Generados con semilla fija para que todos vean lo mismo. Nada es real. */
-import type { Carrera, Clase, Profile, Resultado } from "../lib/types";
+import type { Ajustes, Carrera, Clase, Profile, Resultado } from "../lib/types";
 import { METRICS_FALLBACK, isRisk } from "../lib/metrics";
 
 export interface DemoDb {
@@ -10,6 +10,7 @@ export interface DemoDb {
   resultados: Resultado[];
   carreras: Carrera[];
   roster: { matricula: string; nombre: string; carrera: string; grupo: string }[];
+  ajustes?: Ajustes;
 }
 
 function rng(seed: number) {
@@ -89,11 +90,11 @@ export function buildDemo(): DemoDb {
       }
     });
   });
-  return { version: 1, profiles, clases, resultados, carreras, roster: [] };
+  return { version: 1, profiles, clases, resultados, carreras, roster: [], ajustes: {} };
 }
 
 export const DEMO_ACCOUNTS = [
-  { usuario: "admin", nombre: "Administración", rol: "admin" as const, nota: "Carga clases y las reparte entre decanos" },
-  { usuario: "ana.morales", nombre: "Dra. Ana Morales", rol: "decano" as const, nota: "Decana de Ingeniería · 4 clases" },
-  { usuario: "luis.garcia", nombre: "Luis García", rol: "maestro" as const, nota: "Maestro · Gestión de Proyectos" },
+  { usuario: "admin", nombre: "Administración", rol: "admin" as const, nota: "Carga clases y decide quién las ve" },
+  { usuario: "ana.morales", nombre: "Dra. Ana Morales", rol: "decano" as const, nota: "Ingeniería · 4 clases y su equipo" },
+  { usuario: "luis.garcia", nombre: "Luis García", rol: "maestro" as const, nota: "Gestión de Proyectos" },
 ];

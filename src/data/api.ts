@@ -23,6 +23,8 @@ export interface Api {
   deleteClase(id: string): Promise<void>;
   updateResultado(id: string, patch: { carrera?: string; grupo?: string; matricula?: string }): Promise<void>;
   upsertCarreras(list: Carrera[]): Promise<void>;
+  /** Guarda un ajuste de la plataforma, como los nombres de roles o competencias (solo administración) */
+  setAjuste(clave: string, valor: unknown): Promise<void>;
 
   loadRoster(): Promise<RosterEntry[]>;
   saveRoster(list: RosterEntry[]): Promise<void>;

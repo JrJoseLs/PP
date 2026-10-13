@@ -4,6 +4,7 @@ import { Avatar, Delta, Icon, LevelChip, Segmented, Sheet } from "./ui";
 import { Radar, type Series } from "./Radar";
 import { Ring } from "./Charts";
 import { avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
+import { metricDesc, metricName } from "../lib/labels";
 
 export default function StudentSheet({ id, list, onNav, onClose }: { id: string; list: string[]; onNav(id: string): void; onClose(): void }) {
   const { rows, rowsByClase, user, run } = useApp();
@@ -76,16 +77,16 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         <div className="card pad">
           <h3 className="h-ico good"><Icon name="arrowUp" size={16} /> Fortalezas</h3>
           <ul className="ilist">{data.pos.slice(0, 4).map((x) => (
-            <li key={x.name}><span>{x.name}</span><span className="v">{fmt(x.v)} <Delta v={x.d} /></span></li>))}</ul>
+            <li key={x.name}><span title={metricDesc(x.name)}>{metricName(x.name)}</span><span className="v">{fmt(x.v)} <Delta v={x.d} /></span></li>))}</ul>
         </div>
         <div className="card pad">
           <h3 className="h-ico bad"><Icon name="arrowDown" size={16} /> Para reforzar</h3>
           <ul className="ilist">{data.pos.slice(-4).reverse().map((x) => (
-            <li key={x.name}><span>{x.name}</span><span className="v">{fmt(x.v)} <Delta v={x.d} /></span></li>))}</ul>
+            <li key={x.name}><span title={metricDesc(x.name)}>{metricName(x.name)}</span><span className="v">{fmt(x.v)} <Delta v={x.d} /></span></li>))}</ul>
           {data.riskHigh.length > 0 && <>
             <h4 className="sub-h">Alertas de riesgo ↓</h4>
             <ul className="ilist">{data.riskHigh.slice(0, 3).map((x) => (
-              <li key={x.name}><span>{x.name}</span><span className="v neg">{fmt(x.v)}</span></li>))}</ul>
+              <li key={x.name}><span title={metricDesc(x.name)}>{metricName(x.name)}</span><span className="v neg">{fmt(x.v)}</span></li>))}</ul>
           </>}
         </div>
       </div>
@@ -107,7 +108,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
             const v = metricValue(row, m), a = data.clsAvg[i];
             return (
               <div className="mt-row" key={m}>
-                <span className={isRisk(m) ? "risk" : ""}>{m}{isRisk(m) ? " ↓" : ""}</span>
+                <span className={isRisk(m) ? "risk" : ""} title={metricDesc(m)}>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span>
                 <span className="mt-bar"><i style={{ width: (v ?? 0) + "%", background: row.cls.color }} /><b>{fmt(v)}</b></span>
                 <span className="muted">{fmt(a)}</span>
                 <span><Delta v={v !== null && a !== null ? v - a : null} invert={isRisk(m)} /></span>

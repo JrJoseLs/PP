@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../data/store";
 import { Avatar, Icon } from "./ui";
-import { ROL_LABEL, type Rol } from "../lib/types";
+import type { Rol } from "../lib/types";
+import { rolLabel } from "../lib/labels";
 import { displayName, normText } from "../lib/metrics";
 import StudentSheet from "./StudentSheet";
 import { ThemeButton } from "./Theme";
@@ -67,7 +68,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="sb-foot">
             <div className="sb-user">
               <Avatar name={user.nombre} size={34} />
-              <div><b>{user.nombre}</b><small>{ROL_LABEL[user.rol]}</small></div>
+              <div><b>{user.nombre}</b><small>{rolLabel(user.rol)}</small></div>
             </div>
             <div className="sb-actions">
               <ThemeButton />
@@ -122,7 +123,7 @@ function Palette({ onClose, onStudent, nav }: { onClose(): void; onStudent(id: s
     snap.clases.filter((c) => match(c.nombre + " " + c.grupo)).slice(0, 6).forEach((c) =>
       out.push({ key: "c" + c.id, icon: "classes", title: c.nombre, sub: `Clase · grupo ${c.grupo || "—"}`, color: c.color, act: () => go("/clases/" + c.id) }));
     if (user?.rol !== "maestro") snap.profiles.filter((p) => p.id !== user?.id && match(p.nombre + " " + p.usuario)).slice(0, 5).forEach((p) =>
-      out.push({ key: "u" + p.id, icon: "team", title: p.nombre, sub: ROL_LABEL[p.rol] + " · @" + p.usuario, act: () => go("/equipo?u=" + p.id) }));
+      out.push({ key: "u" + p.id, icon: "team", title: p.nombre, sub: rolLabel(p.rol) + " · @" + p.usuario, act: () => go("/equipo?u=" + p.id) }));
     if (n.length >= 2) rows.filter((r) => r.q.includes(n)).slice(0, 8).forEach((r) =>
       out.push({ key: "s" + r.r.id, icon: "students", title: displayName(r.r.nombre), sub: `${r.cls.nombre} · ${r.carrera}`, act: () => onStudent(r.r.id) }));
     return out;

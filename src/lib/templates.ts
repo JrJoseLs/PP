@@ -5,6 +5,7 @@
    Las filas cuyo nombre empieza por "EJEMPLO" se ignoran al importar. */
 import type { Clase, Profile, Resultado, Rol } from "./types";
 import { METRICS_FALLBACK, isRisk, normText } from "./metrics";
+import { D, M, low } from "./labels";
 
 type XLSXMod = typeof import("xlsx");
 type Cell = string | number | null;
@@ -85,18 +86,18 @@ export interface AccountRow { fila: number; nombre: string; usuario: string; rol
 export async function downloadAccountsTemplate(isAdmin: boolean, decanos: Profile[]) {
   const X = await xlsx();
   const rows: Cell[][] = isAdmin
-    ? [["Nombre", "Usuario", "Rol", "Decano (usuario)", "Contraseña"],
-       ["EJEMPLO Dra. Ana Morales", "ana.morales", "decano", "", ""],
-       ["EJEMPLO Luis García", "luis.garcia", "maestro", decanos[0]?.usuario ?? "ana.morales", ""]]
+    ? [["Nombre", "Usuario", "Rol", `${D().one} (usuario)`, "Contraseña"],
+       ["EJEMPLO Ana Morales", "ana.morales", low(D().one), "", ""],
+       ["EJEMPLO Luis García", "luis.garcia", low(M().one), decanos[0]?.usuario ?? "ana.morales", ""]]
     : [["Nombre", "Usuario", "Contraseña"], ["EJEMPLO Luis García", "luis.garcia", ""]];
   const help: Cell[][] = [["Crear cuentas en bloque"], [],
     ["Nombre", "Nombre completo como se mostrará en la app."],
     ["Usuario", "Con lo que la persona inicia sesión: minúsculas, números, punto o guion (ej. laura.silva). Si lo dejas vacío se genera del nombre."],
-    ...(isAdmin ? [["Rol", "admin, decano o maestro."], ["Decano (usuario)", "Solo para maestros: el usuario de su decano. Puede ser un decano creado en este mismo archivo."]] as Cell[][] : []),
+    ...(isAdmin ? [["Rol", `admin, ${low(D().one)} o ${low(M().one)}.`], [`${D().one} (usuario)`, `Solo para ${low(M().many)}: el usuario de su ${low(D().one)}. Puede ser alguien creado en este mismo archivo.`]] as Cell[][] : []),
     ["Contraseña", "Opcional (mínimo 8). Si la dejas vacía se genera una segura."], [],
     ["", "Al terminar podrás descargar un Excel con los usuarios y contraseñas para entregarlos."],
     ["", "Las filas que empiezan por «EJEMPLO» se ignoran."],
-    ...(isAdmin && decanos.length ? [[], ["Decanos existentes:"], ...decanos.map((d) => ["", `${d.usuario}  (${d.nombre})`] as Cell[])] : [])];
+    ...(isAdmin && decanos.length ? [[], [`${D().many} existentes:`], ...decanos.map((d) => ["", `${d.usuario}  (${d.nombre})`] as Cell[])] : [])];
   save(X, [["Cuentas", sheet(X, rows, isAdmin ? [30, 18, 10, 18, 14] : [30, 18, 14])], ["Instrucciones", sheet(X, help, [18, 100])]], "plantilla-cuentas.xlsx");
 }
 
@@ -118,14 +119,16 @@ export async function parseAccounts(file: File, isAdmin: boolean): Promise<Accou
   if (hi < 0) throw new Error("No encontré la columna «Nombre». Usa la plantilla de cuentas.");
   const h = rows[hi].map(normText);
   const col = (...n: string[]) => n.map((x) => h.indexOf(x)).find((i) => i >= 0) ?? -1;
-  const cN = col("NOMBRE"), cU = col("USUARIO"), cR = col("ROL"), cD = col("DECANO USUARIO", "DECANO"), cP = col("CONTRASENA", "PASSWORD");
+  const cN = col("NOMBRE"), cU = col("USUARIO"), cR = col("ROL"), cD = h.findIndex((x, i) => i !== cU && i !== cN && (x.startsWith("DECANO") || x.startsWith(normText(D().one).split(" ")[0]) || (x.includes("USUARIO") && x !== "USUARIO"))), cP = col("CONTRASENA", "PASSWORD");
   const out: AccountRow[] = [];
   rows.slice(hi + 1).forEach((r, i) => {
     const get = (c: number) => (c >= 0 && r?.[c] != null ? String(r[c]).trim() : "");
     const nombre = get(cN);
     if (!nombre || isExample(nombre)) return;
     const rolTxt = normText(get(cR)).toLowerCase();
-    const rol: Rol = !isAdmin ? "maestro" : rolTxt.startsWith("adm") ? "admin" : rolTxt.startsWith("dec") ? "decano" : "maestro";
+    // acepta el nombre configurado (ej. "supervisor/a") o el original ("decano")
+    const dWord = normText(D().one).toLowerCase().split(" ")[0];
+    const rol: Rol = !isAdmin ? "maestro" : rolTxt.startsWith("adm") ? "admin" : rolTxt.startsWith("dec") || (!!dWord && rolTxt.startsWith(dWord)) ? "decano" : "maestro";
     const row: AccountRow = { fila: hi + i + 2, nombre, usuario: (get(cU) || slugUser(nombre)).toLowerCase(), rol, decano: get(cD).toLowerCase(), password: get(cP) || genPassword() };
     if (!/^[a-z0-9._-]{3,}$/.test(row.usuario)) row.error = "Usuario inválido";
     else if (row.password.length < 8) row.error = "Contraseña de menos de 8 caracteres";

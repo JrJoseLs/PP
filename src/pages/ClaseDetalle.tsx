@@ -8,6 +8,7 @@ import { Histogram, LevelBar, Ring } from "../components/Charts";
 import { avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, plural, sparseMetrics, stdev, type Row } from "../lib/metrics";
 import { byField } from "../lib/groups";
 import { PageHead } from "./Dashboard";
+import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
@@ -83,9 +84,9 @@ export default function ClaseDetalle() {
           <h3>Competencias</h3>
           <p className="muted small">{snap.clases.length > 1 ? "Diferencia frente al promedio de todas tus clases." : "Promedio de la clase."}</p>
           <ul className="ilist dense">{d.comp.map((x) => (
-            <li key={x.m}><span className={isRisk(x.m) ? "risk" : ""}>{x.m}{isRisk(x.m) ? " ↓" : ""}</span>
+            <li key={x.m}><span className={isRisk(x.m) ? "risk" : ""} title={metricDesc(x.m)}>{metricName(x.m)}{isRisk(x.m) ? " ↓" : ""}</span>
               <span className="v"><span className="minibar"><i style={{ width: (x.v ?? 0) + "%", background: c.color }} /></span>{fmt(x.v)}{snap.clases.length > 1 && <Delta v={x.d} invert={isRisk(x.m)} />}</span></li>))}</ul>
-          {pos.length > 1 && <p className="note">Punto fuerte: <b>{pos[0].m}</b>. A reforzar: <b>{pos[pos.length - 1].m}</b>.</p>}
+          {pos.length > 1 && <p className="note">Punto fuerte: <b>{metricName(pos[0].m)}</b>. A reforzar: <b>{metricName(pos[pos.length - 1].m)}</b>.</p>}
           <h4 className="sub-h">Distribución</h4>
           <Histogram rows={d.rr} color={c.color} />
         </section>
@@ -130,8 +131,8 @@ function StudentRow({ r, onOpen }: { r: Row; onOpen(): void }) {
       <span className="st-name"><Avatar name={r.r.nombre} size={28} color={r.cls.color} />{displayName(r.r.nombre)}</span>
       <span className="muted">{r.carrera}</span>
       <span className="st-idx"><b>{fmt(r.indice)}</b><LevelChip v={r.indice} /></span>
-      <span className="hide-sm small">{vals[0]?.m}</span>
-      <span className="hide-sm small muted">{vals[vals.length - 1]?.m}</span>
+      <span className="hide-sm small">{vals[0] && metricName(vals[0].m)}</span>
+      <span className="hide-sm small muted">{vals.length > 0 && metricName(vals[vals.length - 1].m)}</span>
     </button>
   );
 }
@@ -149,19 +150,19 @@ function Access({ c }: { c: Clase }) {
       <div className="card-h"><h3><Icon name="eye" size={18} /> Quién puede ver esta clase</h3></div>
       {rol === "admin" && (
         <div className="acc-row">
-          <span className="acc-l">Decanos</span>
+          <span className="acc-l">{D().many}</span>
           <div className="chips">
             {decanos.map((p) => <PersonChip key={p.id} p={p} on={c.decanos.includes(p.id)} onClick={() => run((a) => a.setClaseDecanos(c.id, toggle(c.decanos, p.id)))} />)}
-            {!decanos.length && <span className="muted small">No hay decanos. Créalos en Equipo.</span>}
+            {!decanos.length && <span className="muted small">No hay {low(D().many)}. Créalos en Equipo.</span>}
           </div>
         </div>
       )}
       <div className="acc-row">
-        <span className="acc-l">Maestros</span>
+        <span className="acc-l">{M().many}</span>
         <div className="chips">
           {maestros.map((p) => <PersonChip key={p.id} p={p} on={c.maestros.includes(p.id)} sub={rol === "admin" ? person(p.decano_id)?.nombre : undefined}
             onClick={() => run((a) => a.setClaseMaestros(c.id, toggle(c.maestros, p.id)))} />)}
-          {!maestros.length && <span className="muted small">{rol === "decano" ? "Aún no tienes maestros. Agrégalos en Equipo." : "No hay maestros."}</span>}
+          {!maestros.length && <span className="muted small">{rol === "decano" ? `Aún no tienes ${low(M().many)}. Agrégalos en Equipo.` : `No hay ${low(M().many)}.`}</span>}
         </div>
       </div>
     </section>

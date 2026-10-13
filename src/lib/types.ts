@@ -35,12 +35,16 @@ export interface Resultado {
 export interface Carrera { codigo: string; nombre: string; }
 export interface RosterEntry { matricula: string; nombre: string; carrera: string; grupo: string; }
 
+/** Ajustes de la plataforma: nombres visibles de roles y competencias */
+export type Ajustes = { roles?: unknown; competencias?: Record<string, string> } & Record<string, unknown>;
+
 /** Lo que el usuario actual puede ver (ya filtrado por permisos) */
 export interface Snapshot {
   profiles: Profile[];
   clases: Clase[];
   resultados: Resultado[];
   carreras: Carrera[];
+  ajustes: Ajustes;
 }
 
 export interface NewUser {
@@ -62,4 +66,3 @@ export interface ClaseDraft {
   decanos: string[];
 }
 
-export const ROL_LABEL: Record<Rol, string> = { admin: "Administración", decano: "Decano/a", maestro: "Maestro/a" };

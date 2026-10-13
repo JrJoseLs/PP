@@ -39,7 +39,7 @@ npm run dev          # http://localhost:5173  (modo demo)
 ### 2. Crear el backend (≈10 min, gratis)
 
 1. Crea un proyecto en <https://supabase.com> (región cercana, p. ej. `us-east-1`).
-2. **SQL Editor → New query**: pega el contenido de [`supabase/migrations/001_esquema.sql`](supabase/migrations/001_esquema.sql) y pulsa **Run**.
+2. **SQL Editor → New query**: pega el contenido de [`supabase/migrations/001_esquema.sql`](supabase/migrations/001_esquema.sql) y pulsa **Run**. Repite con [`002_ajustes.sql`](supabase/migrations/002_ajustes.sql) (nombres configurables de roles y competencias).
 3. **Authentication → Sign In / Providers → Email**: desactiva **“Allow new users to sign up”** (las cuentas solo las crean administración y los decanos) y desactiva **“Confirm email”**.
 4. Despliega la función que crea las cuentas, con **Verify JWT apagado** (desde el panel: *Edge Functions → Deploy a new function → Via Editor*, o con la [CLI de Supabase](https://supabase.com/docs/guides/cli)). Su nombre debe coincidir con `USERS_FN` en `src/data/supabaseApi.ts`:
    ```bash
@@ -83,6 +83,10 @@ DuckDNS solo admite registros A (IP), no CNAME; por eso se apunta a la IP de Git
    - Para **corregir una clase**: ábrela → *Descargar Excel* → edítalo → súbelo en Importar. Si el archivo se llama igual que la clase, la app propone *Reemplazar datos* y conserva su nombre, color y accesos.
    - Para **crear muchas cuentas**: Equipo → *Importar cuentas*. Al terminar descargas un Excel con usuarios y contraseñas.
 5. Todos: **Inicio** (hallazgos automáticos), **Clases**, **Comparar** (hasta 8 series en el radar: clases, maestros, decanos, carreras, grupos o estudiantes), **Estudiantes** (mapa de calor y exportación a Excel). <kbd>⌘K</kbd> o <kbd>/</kbd> abre la búsqueda global.
+
+### Nombres de roles y competencias
+
+En **Ajustes** (solo administración) se elige cómo se llaman los dos roles en pantalla (p. ej. *Supervisor/a · Colaborador/a*, *Coordinador/a · Docente*, *Decano/a · Maestro/a* o nombres propios) y cómo se muestra cada competencia. Internamente los roles siguen siendo `decano` y `maestro`, así que los permisos no cambian. Los informes del juego traen traducciones literales (“Luchado”, “Retrasar”…); la app las muestra en español académico (“Dificultad persistente”, “Postergación de tareas”…), y los Excel se siguen leyendo y exportando con su nombre original.
 
 ### Cómo se leen los números
 

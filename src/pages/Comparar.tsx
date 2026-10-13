@@ -7,6 +7,7 @@ import { LevelBar, MetricBars } from "../components/Charts";
 import { avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, normText, sparseMetrics, type Row } from "../lib/metrics";
 import { SERIES_COLORS, byClase, byDecano, byField, byMaestro, type Group } from "../lib/groups";
 import { PageHead } from "./Dashboard";
+import { D, low, M, metricDesc, metricName } from "../lib/labels";
 
 const MAX = 8;
 type Kind = "clase" | "maestro" | "decano" | "carrera" | "grupo" | "est";
@@ -64,16 +65,16 @@ export default function Comparar() {
 
   const tabs: { value: Kind; label: string }[] = [
     { value: "clase", label: "Clases" },
-    ...(rol !== "maestro" ? [{ value: "maestro" as Kind, label: "Maestros" }] : []),
-    ...(rol === "admin" ? [{ value: "decano" as Kind, label: "Decanos" }] : []),
+    ...(rol !== "maestro" ? [{ value: "maestro" as Kind, label: M().many }] : []),
+    ...(rol === "admin" ? [{ value: "decano" as Kind, label: D().many }] : []),
     { value: "carrera", label: "Carreras" }, { value: "grupo", label: "Grupos" }, { value: "est", label: "Estudiantes" },
   ];
   const n = normText(q);
   const options = [...pool.values()].filter((g) => (tab === "est" ? g.kind === "estudiante" : g.kind === tab) && (!n || normText(g.label + " " + (g.sub ?? "")).includes(n)));
   const presets = [
     { label: "Mis clases", ids: [...pool.values()].filter((g) => g.kind === "clase").slice(0, MAX).map((g) => g.id) },
-    ...(rol !== "maestro" ? [{ label: "Mis maestros", ids: [...pool.values()].filter((g) => g.kind === "maestro").slice(0, MAX).map((g) => g.id) }] : []),
-    ...(rol === "admin" ? [{ label: "Decanos", ids: [...pool.values()].filter((g) => g.kind === "decano").map((g) => g.id) }] : []),
+    ...(rol !== "maestro" ? [{ label: `Mis ${low(M().many)}`, ids: [...pool.values()].filter((g) => g.kind === "maestro").slice(0, MAX).map((g) => g.id) }] : []),
+    ...(rol === "admin" ? [{ label: D().many, ids: [...pool.values()].filter((g) => g.kind === "decano").map((g) => g.id) }] : []),
     { label: "Carreras", ids: [...pool.values()].filter((g) => g.kind === "carrera").slice(0, MAX).map((g) => g.id) },
   ].filter((p) => p.ids.length > 1);
 
@@ -81,7 +82,7 @@ export default function Comparar() {
 
   return (
     <>
-      <PageHead title="Comparar" sub="Elige hasta 8 elementos: clases, maestros, carreras, grupos o estudiantes, y compáralos sobre las mismas competencias." />
+      <PageHead title="Comparar" sub={`Elige hasta 8 elementos: clases, ${low(M().many)}, carreras, grupos o estudiantes, y compáralos sobre las mismas competencias.`} />
 
       <div className="cmp">
         <aside className="card cmp-pick">
@@ -164,7 +165,7 @@ function DiffTable({ labels, chosen }: { labels: string[]; chosen: { label: stri
             const worst = ok.length ? (isRisk(m) ? Math.max(...ok) : Math.min(...ok)) : null;
             return (
               <tr key={m}>
-                <td className={isRisk(m) ? "risk" : ""}>{m}{isRisk(m) ? " ↓" : ""}</td>
+                <td className={isRisk(m) ? "risk" : ""} title={metricDesc(m)}>{metricName(m)}{isRisk(m) ? " ↓" : ""}</td>
                 {vs.map((v, k) => <td key={k} className={"num" + (ok.length > 1 && v === best ? " best" : ok.length > 1 && v === worst ? " worst" : "")}>{fmt(v)}</td>)}
                 {two && <td className="num">{vs[0] !== null && vs[1] !== null ? <span className={(isRisk(m) ? vs[0]! < vs[1]! : vs[0]! > vs[1]!) ? "pos" : "neg"}>{(vs[0]! - vs[1]! >= 0 ? "+" : "") + (vs[0]! - vs[1]!).toFixed(1)}</span> : "—"}</td>}
                 <td className="num muted">{best !== null && worst !== null ? fmt(Math.abs(best - worst)) : "—"}</td>

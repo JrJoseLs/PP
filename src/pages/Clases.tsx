@@ -6,6 +6,7 @@ import { Radar } from "../components/Radar";
 import { LevelBar, Ring } from "../components/Charts";
 import { avgIndex, avgVector, normText, plural } from "../lib/metrics";
 import { PageHead } from "./Dashboard";
+import { D, M, low } from "../lib/labels";
 
 export default function Clases() {
   const { snap, rowsByClase, user, maestrosOf, person } = useApp();
@@ -26,13 +27,13 @@ export default function Clases() {
 
   return (
     <>
-      <PageHead title="Clases" sub={rol === "maestro" ? "Las clases que tu decano te asignó." : rol === "decano" ? "Las clases que administración te entregó. Asígnalas a tus maestros." : "Todas las clases cargadas."}
+      <PageHead title="Clases" sub={rol === "maestro" ? "Las clases que te asignaron." : rol === "decano" ? `Las clases que administración te entregó. Asígnalas a tus ${low(M().many)}.` : "Todas las clases cargadas."}
         actions={rol === "admin" && <Link className="btn primary" to="/importar"><Icon name="plus" size={16} /> Importar</Link>} />
       {snap.clases.length > 0 && (
         <div className="toolbar">
           <label className="search"><Icon name="search" size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar clase o grupo" /></label>
-          {ownerOpts.length > 0 && <Select value={owner} onChange={setOwner} allLabel={rol === "admin" ? "Todos los decanos" : "Todos los maestros"}
-            options={[...ownerOpts.map((p) => ({ value: p.id, label: p.nombre })), { value: "none", label: rol === "admin" ? "Sin decano" : "Sin maestro" }]} />}
+          {ownerOpts.length > 0 && <Select value={owner} onChange={setOwner} allLabel={`Todos los ${low((rol === "admin" ? D() : M()).many)}`}
+            options={[...ownerOpts.map((p) => ({ value: p.id, label: p.nombre })), { value: "none", label: `Sin ${low((rol === "admin" ? D() : M()).one)}` }]} />}
           <Select value={sort} onChange={(v) => setSort(v as typeof sort)} options={[{ value: "nombre", label: "Nombre" }, { value: "indice", label: "Mejor índice" }, { value: "n", label: "Más estudiantes" }]} />
         </div>
       )}
@@ -53,10 +54,10 @@ export default function Clases() {
               <div className="ccard-foot">
                 {rol !== "maestro" && (ms.length
                   ? <span className="avatars">{ms.slice(0, 3).map((m) => <Avatar key={m.id} name={m.nombre} size={24} />)}<small>{ms.map((m) => m.nombre.split(" ")[0]).join(", ")}</small></span>
-                  : <span className="pill warn">Sin maestro</span>)}
+                  : <span className="pill warn">Sin {low(M().one)}</span>)}
                 {rol === "admin" && (c.decanos.length
                   ? <span className="pill">{c.decanos.map((d) => person(d)?.nombre ?? "—").join(", ")}</span>
-                  : <span className="pill warn">Sin decano</span>)}
+                  : <span className="pill warn">Sin {low(D().one)}</span>)}
               </div>
             </Link>
           );

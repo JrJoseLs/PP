@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmt, isRisk, mean, metricLevel } from "../lib/metrics";
 import { Icon } from "./ui";
+import { metricDesc, metricName } from "../lib/labels";
 
 export interface Series { name: string; color: string; values: (number | null)[]; dash?: boolean; muted?: boolean; }
 
@@ -109,7 +110,8 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
     const left = wb && axis.x > wb.width / 2 ? axis.x - 264 : axis.x + 18;
     return (
       <div className="radar-tip" style={{ left: Math.max(4, left), top: Math.max(4, Math.min(axis.y - 20, (wb?.height ?? 600) - 60 - rows.length * 24)) }}>
-        <div className="rt-h">{lab}{risk[i] && <span className="rt-r">↓ menos es mejor</span>}</div>
+        <div className="rt-h">{metricName(lab)}{risk[i] && <span className="rt-r">↓ menos es mejor</span>}</div>
+        {metricDesc(lab) && <div className="rt-d">{metricDesc(lab)}</div>}
         {rows.map((x, j) => {
           const l = metricLevel(lab, x.v);
           return (
@@ -177,7 +179,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
         {!compact && labels.map((lab, i) => {
           const a = ang(i), lx = cx + (R + 16) * Math.cos(a), ly = cy + (R + 16) * Math.sin(a);
           const anchor = Math.cos(a) > 0.04 ? "start" : Math.cos(a) < -0.04 ? "end" : "middle";
-          const lines = wrap(lab + (risk[i] ? " ↓" : ""), Math.abs(Math.cos(a)) < 0.3 ? 13 : narrow ? 12 : 16);
+          const lines = wrap(metricName(lab) + (risk[i] ? " ↓" : ""), Math.abs(Math.cos(a)) < 0.3 ? 13 : narrow ? 12 : 16);
           const center = Math.abs(Math.cos(a)) < 0.2 ? 6 : 0;
           const dy = Math.sin(a) > 0.5 ? 10 + center : Math.sin(a) < -0.5 ? -4 - center - (lines.length - 1) * 12 : 4 - (lines.length - 1) * 6;
           return (

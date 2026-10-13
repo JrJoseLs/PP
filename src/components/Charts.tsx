@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fmt, isRisk, levelCounts, type Row } from "../lib/metrics";
 import type { Series } from "./Radar";
+import { metricDesc, metricName } from "../lib/labels";
 
 /** Anillo de progreso (índice 0–100) */
 export function Ring({ value, size = 64, stroke = 7, color }: { value: number | null; size?: number; stroke?: number; color?: string }) {
@@ -46,7 +47,7 @@ export function MetricBars({ labels, series }: { labels: string[]; series: Serie
     <div className="mbars">
       {labels.map((m, i) => (
         <div className="mbar-row" key={m}>
-          <div className={"mbar-lab" + (isRisk(m) ? " risk" : "")}>{m}{isRisk(m) ? " ↓" : ""}</div>
+          <div className={"mbar-lab" + (isRisk(m) ? " risk" : "")} title={metricDesc(m)}>{metricName(m)}{isRisk(m) ? " ↓" : ""}</div>
           <div className="mbar-tracks">
             {series.map((s, k) => {
               const v = s.values[i];
