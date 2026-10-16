@@ -1,4 +1,4 @@
-import type { Carrera, ClaseDraft, NewUser, Profile, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, ClaseDraft, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 
 export interface Api {
   mode: "demo" | "cloud";
@@ -21,7 +21,9 @@ export interface Api {
   replaceResultados(claseId: string, d: Pick<ClaseDraft, "metrics" | "estudiantes" | "archivo">): Promise<void>;
   updateClase(id: string, patch: { nombre?: string; grupo?: string; periodo?: string; color?: string }): Promise<void>;
   deleteClase(id: string): Promise<void>;
-  updateResultado(id: string, patch: { carrera?: string; grupo?: string; matricula?: string }): Promise<void>;
+  updateResultado(id: string, patch: Partial<Pick<Resultado, "nombre" | "matricula" | "carrera" | "grupo" | "equipo" | "valores">>): Promise<void>;
+  /** Guarda en bloque los estudiantes de una clase: crea o modifica (upserts) y quita (deletes) */
+  saveResultados(claseId: string, upserts: Resultado[], deletes: string[]): Promise<void>;
   upsertCarreras(list: Carrera[]): Promise<void>;
   /** Guarda un ajuste de la plataforma, como los nombres de roles o competencias (solo administración) */
   setAjuste(clave: string, valor: unknown): Promise<void>;

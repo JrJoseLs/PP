@@ -105,6 +105,18 @@ export class SupabaseApi implements Api {
     const { error } = await this.sb.from("clases").delete().eq("id", id);
     if (error) throw error;
   }
+  async saveResultados(claseId: string, upserts: Resultado[], deletes: string[]) {
+    if (deletes.length) {
+      const { error } = await this.sb.from("resultados").delete().eq("clase_id", claseId).in("id", deletes);
+      if (error) throw error;
+    }
+    const rows = upserts.map((r) => ({ id: r.id, clase_id: claseId, nombre: r.nombre, matricula: r.matricula || "", carrera: r.carrera || "",
+      grupo: r.grupo || "", equipo: r.equipo || "", valores: r.valores.map((v) => (typeof v === "number" && !isNaN(v) ? v : 0)) }));
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await this.sb.from("resultados").upsert(rows.slice(i, i + 500));
+      if (error) throw error;
+    }
+  }
   async updateResultado(id: string, patch: Partial<Resultado>) {
     const { error } = await this.sb.from("resultados").update(patch).eq("id", id);
     if (error) throw error;

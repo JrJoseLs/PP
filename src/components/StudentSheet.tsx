@@ -5,9 +5,10 @@ import { Radar, type Series } from "./Radar";
 import { Ring } from "./Charts";
 import { avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
 import { metricDesc, metricName } from "../lib/labels";
+import { EditStudentModal } from "./ClassEditor";
 
 export default function StudentSheet({ id, list, onNav, onClose }: { id: string; list: string[]; onNav(id: string): void; onClose(): void }) {
-  const { rows, rowsByClase, user, run } = useApp();
+  const { rows, rowsByClase, user } = useApp();
   const [invert, setInvert] = usePref("radarInvert", true);
   const [vs, setVs] = useState<"clase" | "carrera" | "ambos">("clase");
   const [editing, setEditing] = useState(false);
@@ -63,8 +64,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         </div>
       </div>
 
-      {editing && <EditRow id={row.r.id} carrera={row.r.carrera} grupo={row.r.grupo} matricula={row.r.matricula}
-        onSave={async (p) => { await run((a) => a.updateResultado(row.r.id, p), "Datos actualizados"); setEditing(false); }} />}
+      {editing && <EditStudentModal row={row} onClose={() => setEditing(false)} />}
 
       <div className="card pad">
         <div className="card-h">
@@ -122,16 +122,3 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
   );
 }
 
-function EditRow({ carrera, grupo, matricula, onSave }: { id: string; carrera: string; grupo: string; matricula: string; onSave(p: { carrera: string; grupo: string; matricula: string }): void }) {
-  const { snap } = useApp();
-  const [c, setC] = useState(carrera), [g, setG] = useState(grupo), [m, setM] = useState(matricula);
-  return (
-    <form className="card pad edit-row" onSubmit={(e) => { e.preventDefault(); onSave({ carrera: c.trim().toUpperCase(), grupo: g.trim(), matricula: m.trim() }); }}>
-      <label className="field"><span>Carrera (código)</span><input list="carreras-dl" value={c} onChange={(e) => setC(e.target.value)} /></label>
-      <datalist id="carreras-dl">{snap.carreras.map((x) => <option key={x.codigo} value={x.codigo}>{x.nombre}</option>)}</datalist>
-      <label className="field"><span>Grupo</span><input value={g} onChange={(e) => setG(e.target.value)} /></label>
-      <label className="field"><span>Matrícula</span><input value={m} onChange={(e) => setM(e.target.value)} /></label>
-      <button className="btn primary">Guardar</button>
-    </form>
-  );
-}

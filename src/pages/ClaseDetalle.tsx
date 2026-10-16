@@ -10,6 +10,7 @@ import { byField } from "../lib/groups";
 import { PageHead } from "./Dashboard";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
+import { GridEditor, ReuploadButton } from "../components/ClassEditor";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
 
@@ -22,6 +23,7 @@ export default function ClaseDetalle() {
   const [vs, setVs] = useState<"general" | "carreras" | "equipos">("general");
   const [sort, setSort] = useState<{ k: "nombre" | "indice" | "carrera"; dir: 1 | -1 }>({ k: "indice", dir: -1 });
   const [edit, setEdit] = useState(false);
+  const [grid, setGrid] = useState(false);
   const c = snap.clases.find((x) => x.id === id);
   const rol = user!.rol;
 
@@ -57,7 +59,8 @@ export default function ClaseDetalle() {
       <PageHead eyebrow={<><span className="dot" style={{ background: c.color }} /> Grupo {c.grupo || "—"}{c.periodo ? " · " + c.periodo : ""}</>}
         title={c.nombre} sub={c.archivo ? <span className="muted small">Archivo: {c.archivo}</span> : undefined}
         actions={<>
-          <button className="btn" onClick={() => downloadClase(c, d.rr.map((r) => r.r))} title="Mismo formato que la plantilla: edítalo y vuelve a subirlo en Importar"><Icon name="download" size={16} /> Descargar Excel</button>
+          <button className="btn" onClick={() => downloadClase(c, d.rr.map((r) => r.r))} title="Mismo formato que la plantilla: corrígelo y súbelo con «Subir corregido»"><Icon name="download" size={16} /> Descargar Excel</button>
+          {rol === "admin" && <ReuploadButton cls={c} rows={d.rr} />}
           <button className="btn" onClick={() => go("/comparar?add=" + encodeURIComponent("clase:" + c.id))}><Icon name="compare" size={16} /> Comparar</button>
           {rol === "admin" && <button className="btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Editar</button>}
         </>} />
@@ -109,11 +112,14 @@ export default function ClaseDetalle() {
       ))}
 
       <section className="card">
-        <div className="card-h pad-x"><h3>Estudiantes</h3><span className="muted small">Toca a un estudiante para ver su perfil</span></div>
-        <div className="stable">
+        <div className="card-h pad-x"><h3>Estudiantes</h3>
+          {grid ? null : rol === "admin"
+            ? <button className="btn sm" onClick={() => setGrid(true)}><Icon name="edit" size={14} /> Editar en tabla</button>
+            : <span className="muted small">Toca a un estudiante para ver su perfil</span>}</div>
+        {grid ? <GridEditor cls={c} rows={d.rr} onDone={() => setGrid(false)} /> : <div className="stable">
           <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "Índice")}<span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
           {sorted.map((r) => <StudentRow key={r.r.id} r={r} onOpen={() => openStudent(r.r.id, sorted.map((x) => x.r.id))} />)}
-        </div>
+        </div>}
       </section>
 
       {edit && <EditClase c={c} onClose={() => setEdit(false)} onDelete={async () => {

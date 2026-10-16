@@ -159,6 +159,15 @@ export class DemoApi implements Api {
     this.db.resultados = this.db.resultados.filter((r) => r.clase_id !== id);
     this.save();
   }
+  async saveResultados(claseId: string, upserts: Resultado[], deletes: string[]) {
+    await wait(160);
+    if (!this.isAdmin()) deny();
+    const del = new Set(deletes);
+    this.db.resultados = this.db.resultados.filter((r) => !(r.clase_id === claseId && del.has(r.id)));
+    const byId = new Map(this.db.resultados.map((r) => [r.id, r]));
+    upserts.forEach((u) => { const e = byId.get(u.id); if (e) Object.assign(e, u, { clase_id: claseId }); else this.db.resultados.push({ ...u, clase_id: claseId }); });
+    this.save();
+  }
   async updateResultado(id: string, patch: Partial<Resultado>) {
     await wait(60);
     if (!this.isAdmin()) deny();

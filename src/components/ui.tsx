@@ -104,7 +104,7 @@ export function Sheet({ open, onClose, children, title, wide }: { open: boolean;
     </div>, document.body);
 }
 
-export function Modal({ open, onClose, children, title }: { open: boolean; onClose(): void; children: ReactNode; title: string }) {
+export function Modal({ open, onClose, children, title, wide }: { open: boolean; onClose(): void; children: ReactNode; title: string; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -116,7 +116,7 @@ export function Modal({ open, onClose, children, title }: { open: boolean; onClo
   if (!open) return null;
   return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" ref={ref}>
+      <div className={"modal" + (wide ? " wide" : "")} role="dialog" aria-modal="true" ref={ref}>
         <h3>{title}</h3>
         {children}
       </div>
