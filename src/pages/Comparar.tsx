@@ -4,16 +4,21 @@ import { useApp, usePref } from "../data/store";
 import { Avatar, Empty, Icon, Segmented } from "../components/ui";
 import { Radar, type Series } from "../components/Radar";
 import { LevelBar, MetricBars } from "../components/Charts";
-import { avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, normText, sparseMetrics, type Row } from "../lib/metrics";
+import { SIN_CARRERA, SIN_GRUPO, avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, normText, plural, sparseMetrics, type Row } from "../lib/metrics";
 import { SERIES_COLORS, byClase, byDecano, byField, byMaestro, type Group } from "../lib/groups";
 import { PageHead } from "./Dashboard";
+import FilterBar from "../components/FilterBar";
+import { useScoped } from "../lib/scope";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 
 const MAX = 8;
 type Kind = "clase" | "maestro" | "decano" | "carrera" | "grupo" | "equipo" | "est";
 
 export default function Comparar() {
-  const { snap, rows, rowsByClase, metrics, user } = useApp();
+  const { snap: snapAll, metrics, user } = useApp();
+  // se compara dentro del ámbito elegido (mismos filtros que Inicio y Estudiantes)
+  const { rows, rowsByClase, clases, active: scoped, allRows } = useScoped();
+  const snap = useMemo(() => ({ ...snapAll, clases }), [snapAll, clases]);
   const [params, setParams] = useSearchParams();
   const [saved, setSaved] = usePref<string[]>("cmpSel_" + user!.id, []);
   const [view, setView] = usePref<"radar" | "barras" | "tabla">("cmpView", "radar");
@@ -30,10 +35,11 @@ export default function Comparar() {
     if (rol !== "maestro") add(byMaestro(snap.profiles, snap.clases, rowsByClase).filter((g) => g.rows.length));
     if (rol === "admin") add(byDecano(snap.profiles, snap.clases, rowsByClase).filter((g) => g.rows.length));
     add(byField(rows, "carrera")); add(byField(rows, "grupo")); add(byField(rows, "equipo"));
-    m.set("todos", { id: "todos", kind: "todos", label: "Promedio general", sub: rows.length + " estudiantes", color: "", rows });
+    m.set("todos", { id: "todos", kind: "todos", label: scoped ? "Promedio del filtro" : "Promedio general", sub: rows.length + " estudiantes", color: "", rows });
+    if (scoped) m.set("global", { id: "global", kind: "todos", label: "Todo (sin filtros)", sub: allRows.length + " estudiantes", color: "", rows: allRows });
     rows.forEach((r) => m.set("est:" + r.r.id, { id: "est:" + r.r.id, kind: "estudiante", label: displayName(r.r.nombre), sub: r.cls.nombre, color: "", rows: [r] }));
     return m;
-  }, [snap, rows, rowsByClase, rol]);
+  }, [snap, rows, rowsByClase, rol, scoped, allRows]);
 
   // selección: ?add= en la URL tiene prioridad (enlaces desde Inicio o una clase)
   const [sel, setSelState] = useState<string[]>(() => {
@@ -71,18 +77,23 @@ export default function Comparar() {
   ];
   const n = normText(q);
   const options = [...pool.values()].filter((g) => (tab === "est" ? g.kind === "estudiante" : g.kind === tab) && (!n || normText(g.label + " " + (g.sub ?? "")).includes(n)));
-  const presets = [
-    { label: "Mis clases", ids: [...pool.values()].filter((g) => g.kind === "clase").slice(0, MAX).map((g) => g.id) },
-    ...(rol !== "maestro" ? [{ label: `Mis ${low(M().many)}`, ids: [...pool.values()].filter((g) => g.kind === "maestro").slice(0, MAX).map((g) => g.id) }] : []),
-    ...(rol === "admin" ? [{ label: D().many, ids: [...pool.values()].filter((g) => g.kind === "decano").map((g) => g.id) }] : []),
-    { label: "Carreras", ids: [...pool.values()].filter((g) => g.kind === "carrera").slice(0, MAX).map((g) => g.id) },
-  ].filter((p) => p.ids.length > 1);
+  // "Desglosar por…": un clic compara todos los grupos de una dimensión dentro del filtro (los más grandes primero)
+  const dims: { kind: Group["kind"]; label: string }[] = [
+    { kind: "clase", label: "Clase" },
+    ...(rol !== "maestro" ? [{ kind: "maestro" as const, label: M().one }] : []),
+    ...(rol === "admin" ? [{ kind: "decano" as const, label: D().one }] : []),
+    { kind: "carrera", label: "Carrera" }, { kind: "grupo", label: "Grupo" }, { kind: "equipo", label: "Equipo" },
+  ];
+  const breakdown = dims.map((d) => ({ ...d, ids: [...pool.values()].filter((g) => g.kind === d.kind && g.rows.length && g.label !== SIN_CARRERA && g.label !== "Grupo " + SIN_GRUPO)
+    .sort((a, b) => b.rows.length - a.rows.length).slice(0, MAX).map((g) => g.id) })).filter((d) => d.ids.length > 1);
+  const addRef = (id: string) => setSel([...valid.filter((x) => x !== id), id].slice(-MAX));
 
-  if (!snap.clases.length) return <><PageHead title="Comparar" /><Empty icon="compare" title="No hay datos para comparar todavía" /></>;
+  if (!snapAll.clases.length) return <><PageHead title="Comparar" /><Empty icon="compare" title="No hay datos para comparar todavía" /></>;
 
   return (
     <>
-      <PageHead title="Comparar" sub={`Elige hasta 8 elementos: clases, ${low(M().many)}, carreras, grupos o estudiantes, y compáralos sobre las mismas competencias.`} />
+      <PageHead title="Comparar" sub={`Elige hasta 8 elementos: clases, ${low(M().many)}, carreras, grupos, equipos o estudiantes. Con los filtros de abajo comparas dentro de una clase, una carrera o lo que necesites.`} />
+      <FilterBar summary={scoped ? <>Comparando dentro de <b>{plural(rows.length, "estudiante", "estudiantes")}</b></> : undefined} />
 
       <div className="cmp">
         <aside className="card cmp-pick">
@@ -104,13 +115,20 @@ export default function Comparar() {
             {!options.length && n && <p className="muted small pad-x">Sin coincidencias.</p>}
           </div>
           <div className="cmp-presets">
-            <span className="muted tiny">Atajos</span>
-            {presets.map((p) => <button key={p.label} className="pill btnish" onClick={() => setSel(p.ids)}>{p.label}</button>)}
-            <button className="pill btnish" onClick={() => setSel([...valid.filter((x) => x !== "todos"), "todos"].slice(-MAX))}>+ Promedio general</button>
+            <span className="muted tiny">Referencias</span>
+            <button className="pill btnish" onClick={() => addRef("todos")}>+ {scoped ? "Promedio del filtro" : "Promedio general"}</button>
+            {scoped && <button className="pill btnish" onClick={() => addRef("global")}>+ Todo (sin filtros)</button>}
           </div>
         </aside>
 
         <section className="cmp-main">
+          {breakdown.length > 0 && (
+            <div className="breakdown">
+              <span className="muted small">Desglosar{scoped ? " este filtro" : ""} por</span>
+              {breakdown.map((d) => <button key={d.kind} className={"bd" + (valid.length > 1 && valid.every((id) => pool.get(id)?.kind === d.kind) ? " on" : "")}
+                onClick={() => setSel(d.ids)}>{d.label}<small>{d.ids.length}</small></button>)}
+            </div>
+          )}
           <div className="sel-chips">
             {chosen.map((g) => (
               <span key={g.id} className="schip" style={{ ["--c" as string]: g.color }}>

@@ -19,7 +19,7 @@ export default function ClaseDetalle() {
   const { openStudent } = useShell();
   const go = useNavigate();
   const [invert, setInvert] = usePref("radarInvert", true);
-  const [vs, setVs] = useState<"general" | "carreras">("general");
+  const [vs, setVs] = useState<"general" | "carreras" | "equipos">("general");
   const [sort, setSort] = useState<{ k: "nombre" | "indice" | "carrera"; dir: 1 | -1 }>({ k: "indice", dir: -1 });
   const [edit, setEdit] = useState(false);
   const c = snap.clases.find((x) => x.id === id);
@@ -32,7 +32,7 @@ export default function ClaseDetalle() {
     const sparse = sparseMetrics(rr, c.metrics);
     const comp = c.metrics.map((m, i) => ({ m, v: vec[i], d: vec[i] !== null && all[i] !== null ? vec[i]! - all[i]! : null })).filter((x) => !sparse.has(x.m));
     const idxs = rr.map((r) => r.indice).filter((x): x is number => x !== null);
-    return { labels: c.metrics.filter((m) => !sparse.has(m)), rr, vec, all, comp, idx: avgIndex(rr), sd: stdev(idxs), lv: levelCounts(rr), carreras: byField(rr, "carrera") };
+    return { labels: c.metrics.filter((m) => !sparse.has(m)), rr, vec, all, comp, idx: avgIndex(rr), sd: stdev(idxs), lv: levelCounts(rr), carreras: byField(rr, "carrera"), equipos: byField(rr, "equipo") };
   }, [c, rows, rowsByClase]);
 
   if (!c || !d) return <Empty icon="classes" title="Clase no encontrada"><Link className="btn" to="/clases">Volver a clases</Link></Empty>;
@@ -45,7 +45,7 @@ export default function ClaseDetalle() {
   const pick = (v: (number | null)[]) => d.labels.map((m) => v[c.metrics.indexOf(m)]) as number[];
   const series: Series[] = vs === "general"
     ? [{ name: c.nombre, color: c.color, values: pick(d.vec) }, ...(snap.clases.length > 1 ? [{ name: "Todas mis clases", color: "var(--text-3)", values: pick(d.all), dash: true, muted: true }] : [])]
-    : d.carreras.slice(0, 8).map((g) => ({ name: g.label, color: g.color, values: pick(avgVector(g.rows, c.metrics)) }));
+    : (vs === "equipos" ? d.equipos : d.carreras).slice(0, 8).map((g) => ({ name: g.label, color: g.color, values: pick(avgVector(g.rows, c.metrics)) }));
   const pos = d.comp.filter((x) => !isRisk(x.m) && x.v !== null).sort((a, b) => b.v! - a.v!);
   const th = (k: typeof sort.k, label: string) => (
     <button className={"th" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : k === "indice" ? -1 : 1 })}>
@@ -76,7 +76,7 @@ export default function ClaseDetalle() {
         <section className="card pad">
           <div className="card-h">
             <h3>Perfil de la clase</h3>
-            <Segmented size="sm" value={vs} onChange={setVs} options={[{ value: "general", label: "vs promedio" }, { value: "carreras", label: "por carrera" }]} />
+            <Segmented size="sm" value={vs} onChange={setVs} options={[{ value: "general", label: "vs promedio" }, { value: "carreras", label: "por carrera" }, ...(d.equipos.length > 1 ? [{ value: "equipos" as const, label: "por equipo" }] : [])]} />
           </div>
           <Radar labels={d.labels} series={series} invert={invert} onInvert={setInvert} size={600} />
         </section>
@@ -92,11 +92,11 @@ export default function ClaseDetalle() {
         </section>
       </div>
 
-      {d.carreras.length > 1 && (
-        <section className="card pad">
-          <h3>Por carrera</h3>
+      {([["Por carrera", d.carreras], ["Por equipo del juego", d.equipos]] as const).map(([titulo, gs]) => gs.length > 1 && (
+        <section className="card pad" key={titulo}>
+          <h3>{titulo}</h3>
           <div className="ctable">
-            {d.carreras.map((g) => (
+            {[...gs].sort((a, b) => (avgIndex(b.rows) ?? 0) - (avgIndex(a.rows) ?? 0)).map((g) => (
               <div className="ct-row" key={g.id}>
                 <span><span className="dot" style={{ background: g.color }} /> {g.label}</span>
                 <span className="muted">{g.rows.length} est.</span>
@@ -106,7 +106,7 @@ export default function ClaseDetalle() {
             ))}
           </div>
         </section>
-      )}
+      ))}
 
       <section className="card">
         <div className="card-h pad-x"><h3>Estudiantes</h3><span className="muted small">Toca a un estudiante para ver su perfil</span></div>

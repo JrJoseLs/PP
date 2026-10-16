@@ -1,39 +1,38 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp, usePref } from "../data/store";
 import { useShell } from "../components/Layout";
-import { Avatar, Empty, Icon, LevelChip, Segmented, Select } from "../components/ui";
-import { displayName, fmt, isRisk, levelOf, metricLevel, metricValue, normText, plural, sparseMetrics, type Row } from "../lib/metrics";
+import { Avatar, Empty, Icon, LevelChip, Segmented } from "../components/ui";
+import FilterBar from "../components/FilterBar";
+import { EMPTY_SCOPE, useScoped } from "../lib/scope";
+import { displayName, fmt, isRisk, levelOf, metricLevel, metricValue, plural, sparseMetrics, type Row } from "../lib/metrics";
 import { PageHead } from "./Dashboard";
 import { metricDesc, metricName } from "../lib/labels";
 
 const PAGE = 100;
 
 export default function Estudiantes() {
-  const { snap, rows, metrics, toast } = useApp();
+  const { metrics, toast } = useApp();
+  // el ámbito (filtros) es compartido con Inicio y Comparar
+  const { rows, allRows, scope, setScope } = useScoped();
   const { openStudent } = useShell();
   const [params] = useSearchParams();
-  const [q, setQ] = useState("");
-  const [clase, setClase] = useState("all");
-  const [carrera, setCarrera] = useState("all");
-  const [nivel, setNivel] = useState(params.get("nivel") ?? "all");
+  // enlace "Ver los N con nivel bajo" desde Inicio
+  useEffect(() => { const n = params.get("nivel"); if (n) setScope({ ...scope, nivel: [n] }); }, []); // eslint-disable-line
   const [mode, setMode] = usePref<"resumen" | "mapa">("estMode", "resumen");
-  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 }>({ k: "indice", dir: nivel === "bajo" ? 1 : -1 });
+  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 }>({ k: "indice", dir: params.get("nivel") === "bajo" ? 1 : -1 });
   const [limit, setLimit] = useState(PAGE);
 
-  const carreras = useMemo(() => [...new Set(rows.map((r) => r.carrera))].sort((a, b) => a.localeCompare(b, "es")), [rows]);
-  const sparse = useMemo(() => sparseMetrics(rows, metrics), [rows, metrics]);
+  const sparse = useMemo(() => sparseMetrics(allRows, metrics), [allRows, metrics]);
   const cols = metrics.filter((m) => !sparse.has(m));
 
   const list = useMemo(() => {
-    const n = normText(q);
-    const out = rows.filter((r) =>
-      (clase === "all" || r.cls.id === clase) && (carrera === "all" || r.carrera === carrera) &&
-      (nivel === "all" || levelOf(r.indice)?.id === nivel) && (!n || r.q.includes(n)));
+    const out = [...rows];
     const get = (r: Row): number | string => sort.k === "nombre" ? displayName(r.r.nombre) : sort.k === "clase" ? r.cls.nombre : sort.k === "carrera" ? r.carrera
       : sort.k === "indice" ? r.indice ?? -1 : metricValue(r, sort.k) ?? -1;
     return out.sort((a, b) => { const x = get(a), y = get(b); return (typeof x === "string" ? x.localeCompare(y as string, "es") : x - (y as number)) * sort.dir; });
-  }, [rows, q, clase, carrera, nivel, sort]);
+  }, [rows, sort]);
+  useEffect(() => setLimit(PAGE), [rows]);
 
   const th = (k: string, label: string, cls = "") => (
     <th className={cls}><button className={"th" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : k === "nombre" || k === "clase" || k === "carrera" ? 1 : -1 })}>
@@ -52,20 +51,14 @@ export default function Estudiantes() {
     toast(`Exportados ${list.length} estudiantes`);
   };
 
-  if (!rows.length) return <><PageHead title="Estudiantes" /><Empty icon="students" title="Aún no hay estudiantes visibles" /></>;
+  if (!allRows.length) return <><PageHead title="Estudiantes" /><Empty icon="students" title="Aún no hay estudiantes visibles" /></>;
   const ids = list.map((r) => r.r.id);
 
   return (
     <>
-      <PageHead title="Estudiantes" sub={`${plural(list.length, "estudiante", "estudiantes")}${list.length !== rows.length ? " de " + rows.length : ""}`}
+      <PageHead title="Estudiantes" sub={`${plural(list.length, "estudiante", "estudiantes")}${list.length !== allRows.length ? " de " + allRows.length : ""}`}
         actions={<button className="btn" onClick={exportXlsx}><Icon name="download" size={16} /> Exportar Excel</button>} />
-      <div className="toolbar">
-        <label className="search grow"><Icon name="search" size={16} /><input value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} placeholder="Nombre, matrícula o grupo" /></label>
-        <Select value={clase} onChange={setClase} allLabel="Todas las clases" options={snap.clases.map((c) => ({ value: c.id, label: c.nombre }))} />
-        <Select value={carrera} onChange={setCarrera} allLabel="Todas las carreras" options={carreras.map((c) => ({ value: c, label: c }))} />
-        <Select value={nivel} onChange={setNivel} allLabel="Todos los niveles" options={[{ value: "alto", label: "Nivel alto" }, { value: "medio", label: "Nivel medio" }, { value: "bajo", label: "Nivel bajo" }]} />
-        <Segmented size="sm" value={mode} onChange={setMode} options={[{ value: "resumen", label: "Resumen" }, { value: "mapa", label: "Mapa de calor" }]} />
-      </div>
+      <FilterBar right={<Segmented size="sm" value={mode} onChange={setMode} options={[{ value: "resumen", label: "Resumen" }, { value: "mapa", label: "Mapa de calor" }]} />} />
 
       <div className="card table-card">
         <div className="table-scroll">
@@ -95,7 +88,7 @@ export default function Estudiantes() {
             </tbody>
           </table>
         </div>
-        {!list.length && <Empty icon="search" title="Nadie coincide con los filtros" />}
+        {!list.length && <Empty icon="search" title="Nadie coincide con los filtros"><button className="btn" onClick={() => setScope(EMPTY_SCOPE)}>Quitar filtros</button></Empty>}
         {list.length > limit && <div className="more"><button className="btn" onClick={() => setLimit(limit + PAGE)}>Mostrar {Math.min(PAGE, list.length - limit)} más</button></div>}
       </div>
     </>

@@ -7,13 +7,18 @@ import { Radar, type Series } from "../components/Radar";
 import { Histogram, LevelBar, Ring } from "../components/Charts";
 import { avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, plural, sparseMetrics, type Row } from "../lib/metrics";
 import { byClase, byDecano, byMaestro, summarize, type Group } from "../lib/groups";
+import FilterBar from "../components/FilterBar";
+import { useScoped } from "../lib/scope";
 
 function greeting() { const h = new Date().getHours(); return h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches"; }
 
 import { D, low, M, metricName } from "../lib/labels";
 
 export default function Dashboard() {
-  const { user, snap, rows, rowsByClase, metrics, ready } = useApp();
+  const { user, snap: snapAll, metrics, ready } = useApp();
+  // todo el panel respeta el ámbito elegido (los mismos filtros que Estudiantes y Comparar)
+  const { rows, rowsByClase, clases, active: scoped, allRows } = useScoped();
+  const snap = useMemo(() => ({ ...snapAll, clases }), [snapAll, clases]);
   const { openStudent } = useShell();
   const go = useNavigate();
   const [view, setView] = usePref<"clase" | "maestro" | "decano" | "total">("dashRadar_" + user!.rol, user!.rol === "admin" ? "decano" : user!.rol === "decano" ? "maestro" : "clase");
@@ -37,7 +42,7 @@ export default function Dashboard() {
   const first = user!.nombre.replace(/^(Dra?|Mtro|Mtra)\.\s*/i, "").split(" ")[0];
   const today = new Date().toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
 
-  if (!snap.clases.length) return (
+  if (!snapAll.clases.length) return (
     <>
       <PageHead eyebrow={today} title={`${greeting()}, ${first}`} />
       <Empty icon="classes" title={rol === "admin" ? "Empieza importando tus clases" : "Aún no tienes clases"}>
@@ -52,12 +57,14 @@ export default function Dashboard() {
   const radarGroups: (Group & { vector: (number | null)[] })[] =
     view === "maestro" && rol !== "maestro" ? d.maestros.slice(0, 8)
     : view === "decano" && rol === "admin" ? d.decanos
-    : view === "total" ? [{ id: "t", kind: "todos", label: "Promedio general", color: "var(--accent)", rows, vector: d.overall }]
+    : view === "total" ? [{ id: "t", kind: "todos", label: scoped ? "Promedio del filtro" : "Promedio general", color: "var(--accent)", rows, vector: d.overall }]
     : d.classes.slice(0, 8);
   const radarLabels = metrics.filter((m) => !d.sparse.has(m));
   const pick = (v: (number | null)[]) => radarLabels.map((m) => v[metrics.indexOf(m)]) as number[];
   const series: Series[] = radarGroups.map((g) => ({ name: g.label, color: g.color, values: pick(g.vector) }));
-  if (view !== "total" && radarGroups.length > 1) series.push({ name: "Promedio general", color: "var(--text-3)", values: pick(d.overall), dash: true, muted: true });
+  if (view !== "total" && radarGroups.length > 1) series.push({ name: scoped ? "Promedio del filtro" : "Promedio general", color: "var(--text-3)", values: pick(d.overall), dash: true, muted: true });
+  // referencia: cómo se ve todo, sin filtros
+  if (scoped) series.push({ name: "Todo (sin filtros)", color: "var(--accent-2)", values: pick(avgVector(allRows, metrics)), dash: true, muted: true });
   const scopeTxt = [plural(snap.clases.length, "clase", "clases"),
     rol !== "maestro" && plural(snap.profiles.filter((p) => p.rol === "maestro").length, low(M().one), low(M().many)),
     rol === "admin" && plural(snap.profiles.filter((p) => p.rol === "decano").length, low(D().one), low(D().many)),
@@ -66,6 +73,8 @@ export default function Dashboard() {
   return (
     <>
       <PageHead eyebrow={today} title={`${greeting()}, ${first}`} sub={scopeTxt} />
+      <FilterBar summary={scoped ? <>Viendo <b>{plural(rows.length, "estudiante", "estudiantes")}</b> de {allRows.length}</> : undefined} />
+      {scoped && !rows.length ? <Empty icon="search" title="Nada coincide con estos filtros">Quita alguno de los filtros de arriba.</Empty> : <>
 
       <div className="stats">
         <Stat label="Índice promedio" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>} sub="Competencias positivas, 0–100" />
@@ -116,6 +125,7 @@ export default function Dashboard() {
         </div>
       )}
       {rol === "decano" && <AttentionCard rows={d.attention} onPick={(r) => openStudent(r.r.id, d.attention.map((x) => x.r.id))} />}
+      </>}
     </>
   );
 }
