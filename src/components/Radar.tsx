@@ -10,7 +10,7 @@ import { fmt, isRisk, mean, metricLevel } from "../lib/metrics";
 import { Icon } from "./ui";
 import { metricDesc, metricName } from "../lib/labels";
 
-export interface Series { name: string; color: string; values: (number | null)[]; dash?: boolean; muted?: boolean; }
+export interface Series { name: string; color: string; values: (number | null)[]; dash?: boolean; muted?: boolean; /** índice general a mostrar en la leyenda (si no, se calcula con los ejes visibles) */ index?: number | null; }
 
 function useMorph(target: number[][], ms = 650) {
   const [cur, setCur] = useState(target);
@@ -193,7 +193,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
       {!compact && <>
         <div className="radar-legend">
           {series.map((s, k) => {
-            const avg = avgOf(s);
+            const avg = s.index !== undefined ? s.index : avgOf(s);
             return (
               <button key={k} type="button" className={"rl" + (hidden.has(k) ? " off" : "")} title="Clic para ocultar o mostrar"
                 onMouseEnter={() => !hidden.has(k) && setFocus(k)} onMouseLeave={() => setFocus(null)}

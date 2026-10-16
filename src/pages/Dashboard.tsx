@@ -61,7 +61,7 @@ export default function Dashboard() {
     : d.classes.slice(0, 8);
   const radarLabels = metrics.filter((m) => !d.sparse.has(m));
   const pick = (v: (number | null)[]) => radarLabels.map((m) => v[metrics.indexOf(m)]) as number[];
-  const series: Series[] = radarGroups.map((g) => ({ name: g.label, color: g.color, values: pick(g.vector) }));
+  const series: Series[] = radarGroups.map((g) => ({ name: g.label, color: g.color, values: pick(g.vector), index: avgIndex(g.rows) }));
   if (view !== "total" && radarGroups.length > 1) series.push({ name: scoped ? "Promedio del filtro" : "Promedio general", color: "var(--text-3)", values: pick(d.overall), dash: true, muted: true });
   // referencia: cómo se ve todo, sin filtros
   if (scoped) series.push({ name: "Todo (sin filtros)", color: "var(--accent-2)", values: pick(avgVector(allRows, metrics)), dash: true, muted: true });
