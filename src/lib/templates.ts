@@ -3,7 +3,7 @@
    - Listado de estudiantes: matrícula, nombre, carrera, grupo
    - Cuentas: para crear decanos y maestros en bloque
    Las filas cuyo nombre empieza por "EJEMPLO" se ignoran al importar. */
-import type { Clase, Profile, Resultado, Rol } from "./types";
+import type { Clase, Profile, Resultado, Rol, RosterEntry } from "./types";
 import { METRICS_FALLBACK, isRisk, normText } from "./metrics";
 import { D, M, low } from "./labels";
 
@@ -26,7 +26,7 @@ export const isExample = (s: unknown) => /^\s*ejemplo\b/i.test(String(s ?? ""));
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "clase";
 
 /* ---------- Informe de competencias ---------- */
-const REPORT_HEAD = ["Estudiante", "Grupo", "Matrícula", "Carrera"];
+const REPORT_HEAD = ["Estudiante", "Equipo", "Grupo", "Matrícula", "Carrera"];
 
 function reportInstructions(metrics: string[]): Cell[][] {
   return [
@@ -34,7 +34,7 @@ function reportInstructions(metrics: string[]): Cell[][] {
     [],
     ["1", "Escribe una fila por estudiante en la hoja «Informe», debajo de los encabezados."],
     ["2", "Estudiante: «APELLIDOS, NOMBRES» o «Nombres Apellidos». Es obligatorio."],
-    ["3", "Grupo, Matrícula y Carrera son opcionales. Carrera es un código (ej. ISO); si la dejas vacía se completa con el listado de estudiantes."],
+    ["3", "Equipo (la columna «Empresa» del juego), Grupo, Matrícula y Carrera son opcionales: lo que falte se completa con el directorio de estudiantes."],
     ["4", "Cada competencia va de 0 a 100. Una celda vacía cuenta como 0."],
     ["5", "No cambies los nombres de las competencias. Puedes quitar columnas que no uses o agregar nuevas al final."],
     ["6", "Las filas que empiezan por «EJEMPLO» se ignoran: bórralas o déjalas."],
@@ -48,10 +48,10 @@ function reportInstructions(metrics: string[]): Cell[][] {
 export async function downloadReportTemplate() {
   const X = await xlsx();
   const m = METRICS_FALLBACK;
-  const ex = (nombre: string, base: number): Cell[] => [nombre, "1593", "", "ISO", ...m.map((x, i) =>
+  const ex = (nombre: string, base: number): Cell[] => [nombre, "STRYDE BIKES", "1593", "", "ISO", ...m.map((x, i) =>
     /F[ÉE]NIX/i.test(x) ? 0 : isRisk(x) ? Math.max(0, 100 - base - (i % 5) * 4) : Math.min(100, base + ((i * 7) % 15)))];
   const rows: Cell[][] = [REPORT_HEAD.concat(m), ex("EJEMPLO, ESTUDIANTE UNO", 62), ex("EJEMPLO, ESTUDIANTE DOS", 45)];
-  save(X, [["Informe", sheet(X, rows, [32, 9, 12, 10, ...m.map((x) => Math.max(10, Math.min(22, x.length + 2)))])],
+  save(X, [["Informe", sheet(X, rows, [32, 18, 9, 12, 10, ...m.map((x) => Math.max(10, Math.min(22, x.length + 2)))])],
     ["Instrucciones", sheet(X, reportInstructions(m), [4, 110])]], "plantilla-informe-competencias.xlsx");
 }
 
@@ -59,25 +59,41 @@ export async function downloadReportTemplate() {
 export async function downloadClase(c: Clase, resultados: Resultado[]) {
   const X = await xlsx();
   const rows: Cell[][] = [REPORT_HEAD.concat(c.metrics), ...resultados.map((r) =>
-    [r.nombre, r.grupo || c.grupo, r.matricula, r.carrera, ...c.metrics.map((_, i) => r.valores[i] ?? null)] as Cell[])];
-  save(X, [["Informe", sheet(X, rows, [32, 9, 12, 10, ...c.metrics.map((x) => Math.max(10, Math.min(22, x.length + 2)))])],
+    [r.nombre, r.equipo ?? "", r.grupo || c.grupo, r.matricula, r.carrera, ...c.metrics.map((_, i) => r.valores[i] ?? null)] as Cell[])];
+  save(X, [["Informe", sheet(X, rows, [32, 18, 9, 12, 10, ...c.metrics.map((x) => Math.max(10, Math.min(22, x.length + 2)))])],
     ["Instrucciones", sheet(X, reportInstructions(c.metrics), [4, 110])]], safeName(c.nombre) + ".xlsx");
 }
 
-/* ---------- Listado de estudiantes ---------- */
+/* ---------- Directorio de estudiantes ---------- */
+const DIR_HEAD = ["Matrícula", "Nombres", "Apellidos", "Carrera", "Grupo", "Equipo del juego", "Correo", "Licencia del juego"];
+const DIR_WIDTH = [14, 24, 26, 12, 9, 20, 30, 18];
+function dirHelp(): Cell[][] {
+  return [["Directorio de estudiantes"], [],
+    ["Matrícula", "ID del estudiante en la institución (ej. A00123427). Es la forma más segura de unir datos."],
+    ["Nombres / Apellidos", "Obligatorio al menos uno. También vale una sola columna «Nombre completo» en cualquier orden."],
+    ["Carrera", "Código o nombre de la carrera (ej. ISO, ADM, FINANZAS)."],
+    ["Grupo", "Grupo o sección de clase (ej. 1593)."],
+    ["Equipo del juego", "Equipo en el simulador (la columna «Empresa» del informe, ej. STRYDE BIKES). Ayuda a enlazar."],
+    ["Correo / Licencia", "Opcionales. Sirven para reconocer a la misma persona en listados del juego."],
+    [],
+    ["", "Puedes subir este archivo tal cual, o cualquier otro listado (ADM535, lista del juego con License number / Team / First name…)."],
+    ["", "La app reconoce las columnas sola y une a cada persona por matrícula, licencia, correo o nombre."],
+    ["", "Las contraseñas y teléfonos se ignoran siempre. Las filas que empiezan por «EJEMPLO» también."]];
+}
 export async function downloadRosterTemplate() {
   const X = await xlsx();
-  const rows: Cell[][] = [["ID", "NOMBRE", "CARRERA", "GRUPO"],
-    ["1090001", "EJEMPLO ANA MARÍA PÉREZ GÓMEZ", "ISO", "1593"],
-    ["1090002", "EJEMPLO LUIS CARLOS RAMÍREZ DÍAZ", "ADM", "1593"]];
-  const help: Cell[][] = [["Listado de estudiantes"], [],
-    ["ID", "Matrícula del estudiante (opcional, pero ayuda a emparejar)."],
-    ["NOMBRE", "Nombre completo. Obligatorio. Se empareja con el informe aunque el orden de nombres y apellidos sea distinto."],
-    ["CARRERA", "Código de la carrera (ej. ISO, ADM). Obligatorio: es lo que se completa en cada estudiante."],
-    ["GRUPO", "Grupo o sección (opcional)."], [],
-    ["", "Solo se guardan estas cuatro columnas. Si usas el ADM535 original, puedes subirlo tal cual."],
-    ["", "Las filas que empiezan por «EJEMPLO» se ignoran."]];
-  save(X, [["Listado", sheet(X, rows, [12, 40, 10, 10])], ["Instrucciones", sheet(X, help, [12, 100])]], "plantilla-listado-estudiantes.xlsx");
+  const rows: Cell[][] = [DIR_HEAD,
+    ["A00123427", "EJEMPLO Ana María", "Pérez Gómez", "ISO", "1593", "STRYDE BIKES", "ana.perez@universidad.edu", ""],
+    ["", "EJEMPLO Luis Carlos", "Ramírez Díaz", "", "", "BIKING", "", "LIC-00231"]];
+  save(X, [["Directorio", sheet(X, rows, DIR_WIDTH)], ["Instrucciones", sheet(X, dirHelp(), [20, 100])]], "plantilla-directorio-estudiantes.xlsx");
+}
+/** Descarga el directorio (o solo los incompletos) con el mismo formato, para completarlo y volver a subirlo */
+export async function downloadDirectory(list: RosterEntry[], soloIncompletos = false) {
+  const X = await xlsx();
+  const sel = soloIncompletos ? list.filter((e) => !e.carrera || !e.matricula || !e.grupo) : list;
+  const rows: Cell[][] = [DIR_HEAD, ...sel.map((e) => [e.matricula, e.nombre, "", e.carrera, e.grupo, e.equipo ?? "", e.email ?? "", e.licencia ?? ""] as Cell[])];
+  save(X, [["Directorio", sheet(X, rows, DIR_WIDTH)], ["Instrucciones", sheet(X, dirHelp(), [20, 100])]],
+    soloIncompletos ? "directorio-por-completar.xlsx" : "directorio-estudiantes.xlsx");
 }
 
 /* ---------- Cuentas de usuario ---------- */

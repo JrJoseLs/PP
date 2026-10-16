@@ -52,6 +52,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
             <span>{row.carrera}</span>
             <span>{row.cls.nombre}</span>
             <span>Grupo {row.grupo}</span>
+            {row.equipo && <span>Equipo {row.equipo}</span>}
             {row.r.matricula && <span>Mat. {row.r.matricula}</span>}
             {user?.rol === "admin" && <button className="link" onClick={() => setEditing((e) => !e)}><Icon name="edit" size={14} /> Editar</button>}
           </div>

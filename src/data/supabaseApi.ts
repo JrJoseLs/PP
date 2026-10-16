@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Api } from "./api";
-import type { Ajustes, Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, RosterEntry, Snapshot } from "../lib/types";
+import type { Ajustes, Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 
 // Nombre de la Edge Function de cuentas en Supabase (ver supabase/functions/manage-users)
 const USERS_FN = "clever-action";
@@ -124,13 +124,36 @@ export class SupabaseApi implements Api {
     const { error } = await this.sb.from("carreras").upsert(list);
     if (error) throw error;
   }
-  async loadRoster() { return this.all<RosterEntry>("roster", "matricula,nombre,carrera,grupo"); }
+  /** Si aún no se ejecutó 003_directorio.sql, el directorio funciona con las columnas básicas */
+  directoryLimited = false;
+  private static readonly NEED_003 = "Falta actualizar la base de datos: ejecuta supabase/migrations/003_directorio.sql en el SQL Editor de Supabase.";
+  async loadRoster() {
+    try { const r = await this.all<RosterEntry>("roster", "matricula,nombre,carrera,grupo,email,equipo,licencia"); this.directoryLimited = false; return r; }
+    catch { this.directoryLimited = true; return this.all<RosterEntry>("roster", "matricula,nombre,carrera,grupo"); }
+  }
   async saveRoster(list: RosterEntry[]) {
+    const rows = list.map((r) => ({ matricula: r.matricula || "", nombre: r.nombre, carrera: r.carrera || "", grupo: r.grupo || "",
+      email: r.email || "", equipo: r.equipo || "", licencia: r.licencia || "" }));
+    const { error } = await this.sb.rpc("replace_roster", { p: rows });
+    if (!error) return;
+    if (!/replace_roster|function/i.test(error.message)) throw error;
+    // base de datos sin 003: se guardan solo las columnas básicas
     const del = await this.sb.from("roster").delete().not("id", "is", null);
     if (del.error) throw del.error;
-    for (let i = 0; i < list.length; i += 500) {
-      const { error } = await this.sb.from("roster").insert(list.slice(i, i + 500));
-      if (error) throw error;
+    const basic = rows.map(({ matricula, nombre, carrera, grupo }) => ({ matricula, nombre, carrera, grupo }));
+    for (let i = 0; i < basic.length; i += 500) {
+      const { error: e } = await this.sb.from("roster").insert(basic.slice(i, i + 500));
+      if (e) throw e;
     }
+    if (rows.some((r) => r.email || r.equipo || r.licencia)) throw new Error("Se guardó el directorio, pero sin correo, equipo ni licencia. " + SupabaseApi.NEED_003);
+  }
+  async syncResultados(list: ResultadoPatch[]) {
+    let n = 0;
+    for (let i = 0; i < list.length; i += 500) {
+      const { data, error } = await this.sb.rpc("sync_resultados", { p: list.slice(i, i + 500) });
+      if (error) throw new Error(/sync_resultados|function/i.test(error.message) ? SupabaseApi.NEED_003 : error.message);
+      n += (data as number) ?? 0;
+    }
+    return n;
   }
 }

@@ -58,6 +58,7 @@ export interface Row {
   indice: number | null;
   carrera: string;     // etiqueta visible
   grupo: string;
+  equipo: string;     // equipo dentro del juego ("" si no se sabe)
   q: string;           // texto de búsqueda
 }
 export const SIN_CARRERA = "Sin carrera";

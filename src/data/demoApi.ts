@@ -2,7 +2,7 @@
    políticas RLS de supabase/migrations/001_esquema.sql, para que el modo
    demo muestre fielmente lo que cada rol puede ver y hacer. */
 import type { Api } from "./api";
-import type { Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 import { buildDemo, type DemoDb } from "./demoSeed";
 
 const DB_KEY = "pp_demo_db_v1";
@@ -20,7 +20,7 @@ export class DemoApi implements Api {
   constructor() {
     let db: DemoDb | null = null;
     try { db = JSON.parse(localStorage.getItem(DB_KEY) || "null"); } catch { /* */ }
-    this.db = db && db.version === 1 ? db : buildDemo();
+    this.db = db && db.version === 2 ? db : buildDemo();
   }
   private save() { try { localStorage.setItem(DB_KEY, JSON.stringify(this.db)); } catch { /* lleno o bloqueado */ } }
   static reset() { try { localStorage.removeItem(DB_KEY); } catch { /* */ } }
@@ -179,4 +179,13 @@ export class DemoApi implements Api {
   }
   async loadRoster() { if (!this.isAdmin()) deny(); return this.db.roster; }
   async saveRoster(list: RosterEntry[]) { if (!this.isAdmin()) deny(); this.db.roster = list; this.save(); }
+  async syncResultados(list: ResultadoPatch[]) {
+    await wait(120);
+    if (!this.isAdmin()) deny();
+    const byId = new Map(this.db.resultados.map((r) => [r.id, r]));
+    let n = 0;
+    list.forEach(({ id, ...patch }) => { const r = byId.get(id); if (r) { Object.assign(r, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))); n++; } });
+    this.save();
+    return n;
+  }
 }

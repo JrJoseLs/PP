@@ -29,11 +29,25 @@ export interface Resultado {
   matricula: string;
   carrera: string;
   grupo: string;
+  /** Equipo dentro del juego (columna "Empresa" / "Team") */
+  equipo?: string;
   valores: number[];
 }
 
 export interface Carrera { codigo: string; nombre: string; }
-export interface RosterEntry { matricula: string; nombre: string; carrera: string; grupo: string; }
+/** Persona del directorio de estudiantes (solo lo ve administración) */
+export interface RosterEntry {
+  matricula: string;
+  nombre: string;
+  carrera: string;
+  grupo: string;
+  equipo?: string;
+  email?: string;
+  licencia?: string;
+}
+
+/** Cambio puntual sobre un resultado ya cargado (completar datos desde el directorio) */
+export interface ResultadoPatch { id: string; matricula?: string; carrera?: string; grupo?: string; equipo?: string; }
 
 /** Ajustes de la plataforma: nombres visibles de roles y competencias */
 export type Ajustes = { roles?: unknown; competencias?: Record<string, string> } & Record<string, unknown>;

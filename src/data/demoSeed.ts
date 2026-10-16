@@ -1,7 +1,7 @@
 /* Datos de ejemplo: 4 decanos, 16 maestros, 16 clases, ~400 estudiantes.
    Generados con semilla fija para que todos vean lo mismo. Nada es real. */
-import type { Ajustes, Carrera, Clase, Profile, Resultado } from "../lib/types";
-import { METRICS_FALLBACK, isRisk } from "../lib/metrics";
+import type { Ajustes, Carrera, Clase, Profile, Resultado, RosterEntry } from "../lib/types";
+import { METRICS_FALLBACK, displayName, isRisk, normText } from "../lib/metrics";
 
 export interface DemoDb {
   version: number;
@@ -9,7 +9,7 @@ export interface DemoDb {
   clases: Clase[];
   resultados: Resultado[];
   carreras: Carrera[];
-  roster: { matricula: string; nombre: string; carrera: string; grupo: string }[];
+  roster: RosterEntry[];
   ajustes?: Ajustes;
 }
 
@@ -34,6 +34,7 @@ const FACULTADES = [
     clases: ["Ética Profesional", "Liderazgo y Negociación", "Pensamiento Crítico", "Comunicación Estratégica"],
     maestros: [["natalia.flores", "Natalia Flores"], ["hector.mendoza", "Héctor Mendoza"], ["laura.silva", "Laura Silva"], ["ricardo.vega", "Ricardo Vega"]] },
 ];
+const TEAMS = ["STRYDE BIKES", "BIKING", "CarbonRide", "Velo Andino", "Ruta Norte", "Pedal Pro", "Cumbre Cycles", "Rueda Libre"];
 const NOMBRES = ["JUAN", "MARÍA", "JOSÉ", "ANA", "LUIS", "CARMEN", "CARLOS", "LAURA", "PEDRO", "SOFÍA", "MIGUEL", "VALENTINA", "DANIEL", "CAMILA", "JORGE", "ISABELLA", "RAFAEL", "GABRIELA", "FERNANDO", "ANDREA", "ALEJANDRO", "PAULA", "MANUEL", "LUCÍA", "RICARDO", "DANIELA", "EDUARDO", "NATALIA", "ANTONIO", "MARIANA", "FRANCISCO", "ELENA", "ROBERTO", "VICTORIA", "ÁNGEL", "JULIA", "SAMUEL", "RENATA", "EMILIO", "XIMENA"];
 const APELLIDOS = ["GARCÍA", "RODRÍGUEZ", "MARTÍNEZ", "HERNÁNDEZ", "LÓPEZ", "GONZÁLEZ", "PÉREZ", "SÁNCHEZ", "RAMÍREZ", "TORRES", "FLORES", "RIVERA", "GÓMEZ", "DÍAZ", "REYES", "MORALES", "CRUZ", "ORTIZ", "GUTIÉRREZ", "CHÁVEZ", "RAMOS", "VARGAS", "CASTILLO", "JIMÉNEZ", "MORENO", "ROMERO", "ALVARADO", "MENDOZA", "RUIZ", "AGUILAR", "MEDINA", "CASTRO", "VEGA", "SOTO", "PEÑA", "NÚÑEZ", "PAULINO", "ALMONTE", "DE LA CRUZ", "BATISTA"];
 
@@ -46,6 +47,7 @@ export function buildDemo(): DemoDb {
 
   const profiles: DemoDb["profiles"] = [{ id: "u-admin", usuario: "admin", nombre: "Administración", rol: "admin", decano_id: null, activo: true, password: "demo" }];
   const clases: Clase[] = [], resultados: Resultado[] = [], carreras: Carrera[] = [];
+  const roster: DemoDb["roster"] = [];
   let ci = 0, ri = 0;
   const metrics = METRICS_FALLBACK;
 
@@ -70,6 +72,8 @@ export function buildDemo(): DemoDb {
       const profile = metrics.map(() => gauss() * 7);
       const count = 20 + Math.floor(r() * 12);
       const used = new Set<string>();
+      // equipos del juego de esta clase (columna "Empresa" del informe)
+      const teams = [...TEAMS].sort(() => r() - 0.5).slice(0, 4 + Math.floor(r() * 2));
       for (let s = 0; s < count; s++) {
         let nombre = "";
         do { nombre = `${pick(APELLIDOS)} ${pick(APELLIDOS)}, ${pick(NOMBRES)}${r() < 0.5 ? " " + pick(NOMBRES) : ""}`; } while (used.has(nombre));
@@ -82,15 +86,18 @@ export function buildDemo(): DemoDb {
           if (/ESFUERZO|TENACIDAD|PERSEVERANCIA/i.test(m)) return clamp(56 + a * 9 + effort * 14 + profile[k] + gauss() * 9);
           return clamp(55 + a * 15 + profile[k] + gauss() * 9);
         });
-        resultados.push({
-          id: id("r", ++ri), clase_id: cId, nombre, valores, grupo,
-          carrera: r() < 0.06 ? "" : pick(f.carreras)[0],
-          matricula: String(1090000 + Math.floor(r() * 9999)),
-        });
+        const carrera = pick(f.carreras)[0], matricula = "A00" + (118000 + ri * 7), equipo = teams[s % teams.length];
+        // ~12 % llega del juego sin carrera ni matrícula: el directorio las completa ("Aplicar a las clases")
+        const conocido = r() > 0.12;
+        resultados.push({ id: id("r", ++ri), clase_id: cId, nombre, valores, grupo, equipo,
+          carrera: conocido ? carrera : "", matricula: conocido ? matricula : "" });
+        // directorio de ejemplo: con algunos huecos para mostrar cómo se completan
+        roster.push({ nombre: displayName(nombre), matricula, carrera: r() < 0.08 ? "" : carrera, grupo, equipo,
+          email: r() < 0.7 ? normText(displayName(nombre)).toLowerCase().split(" ").slice(0, 2).join(".") + "@universidad.edu" : "", licencia: "" });
       }
     });
   });
-  return { version: 1, profiles, clases, resultados, carreras, roster: [], ajustes: {} };
+  return { version: 2, profiles, clases, resultados, carreras, roster, ajustes: {} };
 }
 
 export const DEMO_ACCOUNTS = [

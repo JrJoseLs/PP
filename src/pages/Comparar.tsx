@@ -10,7 +10,7 @@ import { PageHead } from "./Dashboard";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 
 const MAX = 8;
-type Kind = "clase" | "maestro" | "decano" | "carrera" | "grupo" | "est";
+type Kind = "clase" | "maestro" | "decano" | "carrera" | "grupo" | "equipo" | "est";
 
 export default function Comparar() {
   const { snap, rows, rowsByClase, metrics, user } = useApp();
@@ -29,7 +29,7 @@ export default function Comparar() {
     add(byClase(snap.clases, rowsByClase));
     if (rol !== "maestro") add(byMaestro(snap.profiles, snap.clases, rowsByClase).filter((g) => g.rows.length));
     if (rol === "admin") add(byDecano(snap.profiles, snap.clases, rowsByClase).filter((g) => g.rows.length));
-    add(byField(rows, "carrera")); add(byField(rows, "grupo"));
+    add(byField(rows, "carrera")); add(byField(rows, "grupo")); add(byField(rows, "equipo"));
     m.set("todos", { id: "todos", kind: "todos", label: "Promedio general", sub: rows.length + " estudiantes", color: "", rows });
     rows.forEach((r) => m.set("est:" + r.r.id, { id: "est:" + r.r.id, kind: "estudiante", label: displayName(r.r.nombre), sub: r.cls.nombre, color: "", rows: [r] }));
     return m;
@@ -67,7 +67,7 @@ export default function Comparar() {
     { value: "clase", label: "Clases" },
     ...(rol !== "maestro" ? [{ value: "maestro" as Kind, label: M().many }] : []),
     ...(rol === "admin" ? [{ value: "decano" as Kind, label: D().many }] : []),
-    { value: "carrera", label: "Carreras" }, { value: "grupo", label: "Grupos" }, { value: "est", label: "Estudiantes" },
+    { value: "carrera", label: "Carreras" }, { value: "grupo", label: "Grupos" }, ...(rows.some((r) => r.equipo) ? [{ value: "equipo" as Kind, label: "Equipos" }] : []), { value: "est", label: "Estudiantes" },
   ];
   const n = normText(q);
   const options = [...pool.values()].filter((g) => (tab === "est" ? g.kind === "estudiante" : g.kind === tab) && (!n || normText(g.label + " " + (g.sub ?? "")).includes(n)));

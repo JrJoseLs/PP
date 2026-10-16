@@ -39,7 +39,7 @@ npm run dev          # http://localhost:5173  (modo demo)
 ### 2. Crear el backend (≈10 min, gratis)
 
 1. Crea un proyecto en <https://supabase.com> (región cercana, p. ej. `us-east-1`).
-2. **SQL Editor → New query**: pega el contenido de [`supabase/migrations/001_esquema.sql`](supabase/migrations/001_esquema.sql) y pulsa **Run**. Repite con [`002_ajustes.sql`](supabase/migrations/002_ajustes.sql) (nombres configurables de roles y competencias).
+2. **SQL Editor → New query**: pega el contenido de [`supabase/migrations/001_esquema.sql`](supabase/migrations/001_esquema.sql) y pulsa **Run**. Repite con [`002_ajustes.sql`](supabase/migrations/002_ajustes.sql) (nombres configurables) y [`003_directorio.sql`](supabase/migrations/003_directorio.sql) (directorio de estudiantes y equipos del juego).
 3. **Authentication → Sign In / Providers → Email**: desactiva **“Allow new users to sign up”** (las cuentas solo las crean administración y los decanos) y desactiva **“Confirm email”**.
 4. Despliega la función que crea las cuentas, con **Verify JWT apagado** (desde el panel: *Edge Functions → Deploy a new function → Via Editor*, o con la [CLI de Supabase](https://supabase.com/docs/guides/cli)). Su nombre debe coincidir con `USERS_FN` en `src/data/supabaseApi.ts`:
    ```bash
@@ -83,6 +83,14 @@ DuckDNS solo admite registros A (IP), no CNAME; por eso se apunta a la IP de Git
    - Para **corregir una clase**: ábrela → *Descargar Excel* → edítalo → súbelo en Importar. Si el archivo se llama igual que la clase, la app propone *Reemplazar datos* y conserva su nombre, color y accesos.
    - Para **crear muchas cuentas**: Equipo → *Importar cuentas*. Al terminar descargas un Excel con usuarios y contraseñas.
 5. Todos: **Inicio** (hallazgos automáticos), **Clases**, **Comparar** (hasta 8 series en el radar: clases, maestros, decanos, carreras, grupos o estudiantes), **Estudiantes** (mapa de calor y exportación a Excel). <kbd>⌘K</kbd> o <kbd>/</kbd> abre la búsqueda global.
+
+### Directorio de estudiantes
+
+En **Importar** se suelta cualquier Excel. Los **listados** (ADM535, la lista del juego con *License number / Team / First name / Last name / Email*, o recopilaciones propias) se reconocen por sus columnas, en español o inglés, y se unen al **directorio** por matrícula, licencia, correo o nombre (con el equipo del juego para desempatar). Lo que falta se completa sin borrar nada; si un archivo trae datos distintos, se muestran como diferencias y se elige cuáles mandan. Las contraseñas y teléfonos se ignoran siempre.
+
+Los **informes del juego** enlazan a cada estudiante con su persona del directorio: los seguros solos, los dudosos se confirman y los nuevos se agregan con un clic. La columna *Empresa* del informe es el **equipo del juego** y se puede comparar en *Comparar → Equipos*.
+
+En la pestaña **Directorio**: tabla editable, asignar carrera/grupo a varios a la vez, *Descargar incompletos* (llenar en Excel y volver a subir) y *Aplicar a las clases* para completar matrícula, carrera, grupo o equipo de las clases ya cargadas.
 
 ### Nombres de roles y competencias
 

@@ -1,7 +1,7 @@
-/* Lectura de los Excel: informes del juego (icompetencyreport) y listados (ADM535).
-   Portado de la versión anterior; el tipo de archivo se detecta solo. */
-import type { RosterEntry, Resultado } from "./types";
-import { METRICS_FALLBACK, nameKey, nameTokens, normText } from "./metrics";
+/* Lectura de los informes del juego (icompetencyreport). Los listados de estudiantes
+   se leen en directory.ts, que reconoce sus columnas automáticamente. */
+import type { Resultado } from "./types";
+import { METRICS_FALLBACK, normText } from "./metrics";
 import { isExample } from "./templates";
 
 type Rows = unknown[][];
@@ -20,36 +20,6 @@ function normGroup(v: unknown) {
   return (m ? m[1] : t).trim();
 }
 
-const KNOWN_METRICS = new Set(METRICS_FALLBACK.map(normText));
-
-export function findRosterHeader(rows: Rows) {
-  for (let i = 0; i < Math.min(rows.length, 40); i++) {
-    const n = (rows[i] ?? []).map(normText);
-    // un informe con columna "Carrera" no es un listado: empieza por "Estudiante" y trae competencias
-    if (n[0] === "ESTUDIANTE" && n.some((v) => KNOWN_METRICS.has(v))) return -1;
-    if (n.includes("CARRERA") && n.some((v) => ["NOMBRE", "NOMBRES", "NOMBRE COMPLETO", "ESTUDIANTE"].includes(v))) return i;
-  }
-  return -1;
-}
-
-export function parseRoster(rows: Rows, headerIdx: number): RosterEntry[] {
-  const h = rows[headerIdx].map(normText);
-  const col = (...names: string[]) => { for (const n of names) { const i = h.indexOf(n); if (i >= 0) return i; } return -1; };
-  const cNombre = col("NOMBRE", "NOMBRES", "NOMBRE COMPLETO", "ESTUDIANTE");
-  const cCarrera = col("CARRERA");
-  const cId = col("ID", "MATRICULA", "ID ESTUDIANTE");
-  const cGrupo = col("GRUPO", "RNC", "NRC", "SECCION");
-  const get = (r: unknown[], c: number) => (c >= 0 ? cleanCode(r[c]) : "");
-  const out: RosterEntry[] = [];
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const r = rows[i]; if (!r) continue;
-    const nombre = String(r[cNombre] ?? "").replace(/\s+/g, " ").trim();
-    if (!nombre || isExample(nombre)) continue;
-    out.push({ matricula: get(r, cId), nombre, carrera: get(r, cCarrera).toUpperCase(), grupo: get(r, cGrupo) });
-  }
-  return out;
-}
-
 export interface ParsedReport { metrics: string[]; students: Omit<Resultado, "id" | "clase_id">[]; }
 
 export function parseReport(rows: Rows): ParsedReport | null {
@@ -57,7 +27,7 @@ export function parseReport(rows: Rows): ParsedReport | null {
   if (headerIdx === -1) return null;
   const header = rows[headerIdx];
   let metricCols: { name: string; c: number }[] = [];
-  let cCarrera = -1, cGrupo = -1, cMat = -1;
+  let cCarrera = -1, cGrupo = -1, cMat = -1, cEquipo = -1;
   for (let c = 2; c < header.length; c++) {
     const raw = header[c];
     if (raw === undefined || raw === null || String(raw).trim() === "") continue;
@@ -65,11 +35,15 @@ export function parseReport(rows: Rows): ParsedReport | null {
     if (n === "CARRERA") cCarrera = c;
     else if (["GRUPO", "SECCION", "NRC", "RNC"].includes(n)) cGrupo = c;
     else if (["ID", "MATRICULA"].includes(n)) cMat = c;
+    else if (["EQUIPO", "TEAM", "EMPRESA"].includes(n)) cEquipo = c;
     else metricCols.push({ name: String(raw).trim(), c });
   }
   if (!metricCols.length) metricCols = METRICS_FALLBACK.map((m, i) => ({ name: m, c: 2 + i }));
-  // La 2ª columna ("Empresa" en el software del juego) se usa para el grupo
-  const col1Group = ["EMPRESA", "GRUPO", "SECCION", "NRC", "RNC"].includes(normText(header[1]));
+  // La 2ª columna: "Empresa" en el juego = el EQUIPO del estudiante (ej. "STRYDE BIKES"),
+  // o, en plantillas propias, el grupo / sección de clase
+  const h1 = normText(header[1]);
+  const col1Team = ["EMPRESA", "EQUIPO", "TEAM"].includes(h1);
+  const col1Group = ["GRUPO", "SECCION", "NRC", "RNC"].includes(h1);
 
   const students: ParsedReport["students"] = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -84,33 +58,11 @@ export function parseReport(rows: Rows): ParsedReport | null {
       valores: metricCols.map((m) => { const v = r[m.c]; const n = v === undefined || v === null || v === "" ? 0 : Number(v); return isNaN(n) ? 0 : round2(n); }),
       carrera: cCarrera >= 0 ? cleanCode(r[cCarrera]).toUpperCase() : "",
       grupo: cGrupo >= 0 ? normGroup(r[cGrupo]) : col1Group ? normGroup(col1) : "",
+      equipo: (cEquipo >= 0 ? String(r[cEquipo] ?? "") : col1Team ? col1 : "").replace(/s+/g, " ").trim(),
       matricula: cMat >= 0 ? cleanCode(r[cMat]) : "",
     });
   }
   return students.length ? { metrics: metricCols.map((m) => m.name), students } : null;
-}
-
-/** Empareja "APELLIDOS, NOMBRES" del informe con "NOMBRES APELLIDOS" del listado */
-export function makeMatcher(roster: RosterEntry[]) {
-  const idx = roster.map((r) => ({ r, toks: new Set(nameTokens(r.nombre)) }));
-  const cache = new Map<string, RosterEntry | null>();
-  return (nombre: string): RosterEntry | null => {
-    const key = nameKey(nombre);
-    if (cache.has(key)) return cache.get(key)!;
-    const t = new Set(nameTokens(nombre));
-    let best: RosterEntry | null = null, bestScore = 0, tie = false;
-    if (t.size >= 2) for (const e of idx) {
-      let inter = 0; t.forEach((x) => { if (e.toks.has(x)) inter++; });
-      const minSize = Math.min(t.size, e.toks.size);
-      if (!(inter >= 3 || (inter >= 2 && inter === minSize))) continue;
-      const score = inter / (t.size + e.toks.size - inter);
-      if (score > bestScore) { best = e.r; bestScore = score; tie = false; }
-      else if (score === bestScore && e.r !== best) tie = true;
-    }
-    const res = best && !tie ? best : null;
-    cache.set(key, res);
-    return res;
-  };
 }
 
 export function guessGroup(students: { grupo: string }[]) {

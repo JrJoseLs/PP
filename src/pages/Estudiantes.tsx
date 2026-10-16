@@ -42,7 +42,7 @@ export default function Estudiantes() {
   const exportXlsx = async () => {
     const XLSX = await import("xlsx");
     const data = list.map((r) => {
-      const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "" };
+      const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Equipo: r.equipo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "" };
       metrics.forEach((m) => { o[metricName(m)] = metricValue(r, m); });
       return o;
     });
@@ -72,7 +72,7 @@ export default function Estudiantes() {
           <table className={"etable" + (mode === "mapa" ? " heat" : "")}>
             <thead><tr>
               {th("nombre", "Estudiante", "sticky")}
-              {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th>{th("indice", "Índice", "num")}<th>Nivel</th></>
+              {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th><th className="hide-sm">Equipo</th>{th("indice", "Índice", "num")}<th>Nivel</th></>
                 : <>{th("indice", "Índice", "num")}{cols.map((m) => <th key={m} className="vert" title={metricName(m) + (metricDesc(m) ? " · " + metricDesc(m) : "")}><button className={"th" + (sort.k === m ? " on" : "")} onClick={() => setSort({ k: m, dir: sort.k === m ? (-sort.dir as 1 | -1) : -1 })}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></button></th>)}</>}
             </tr></thead>
             <tbody>
@@ -83,6 +83,7 @@ export default function Estudiantes() {
                     <td><span className="dot" style={{ background: r.cls.color }} /> {r.cls.nombre}</td>
                     <td className="muted">{r.carrera}</td>
                     <td className="muted hide-sm">{r.grupo}</td>
+                    <td className="muted hide-sm">{r.equipo || "—"}</td>
                     <td className="num"><span className="idxbar"><i style={{ width: (r.indice ?? 0) + "%" }} /></span><b>{fmt(r.indice)}</b></td>
                     <td><LevelChip v={r.indice} /></td>
                   </> : <>

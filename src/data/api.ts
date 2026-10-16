@@ -1,4 +1,4 @@
-import type { Carrera, ClaseDraft, NewUser, Profile, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, ClaseDraft, NewUser, Profile, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 
 export interface Api {
   mode: "demo" | "cloud";
@@ -28,6 +28,10 @@ export interface Api {
 
   loadRoster(): Promise<RosterEntry[]>;
   saveRoster(list: RosterEntry[]): Promise<void>;
+  /** Completa datos de resultados ya cargados (matrícula, carrera, grupo, equipo) */
+  syncResultados(list: ResultadoPatch[]): Promise<number>;
+  /** true si la base de datos aún no tiene las columnas nuevas del directorio (falta 003) */
+  directoryLimited?: boolean;
 }
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;

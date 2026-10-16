@@ -89,7 +89,8 @@ export function AppProvider({ children, onToasts }: { children: ReactNode; onToa
     for (const r of snap.resultados) {
       const cls = clsMap.get(r.clase_id); if (!cls) continue;
       const row: Row = { r, cls, indice: generalIndex(cls.metrics, r.valores), carrera: carreraName(r.carrera),
-        grupo: r.grupo || cls.grupo || SIN_GRUPO, q: normText(r.nombre + " " + r.matricula + " " + r.grupo + " " + cls.nombre) };
+        grupo: r.grupo || cls.grupo || SIN_GRUPO, equipo: r.equipo || "",
+        q: normText(r.nombre + " " + r.matricula + " " + r.grupo + " " + (r.equipo ?? "") + " " + cls.nombre) };
       rows.push(row);
       if (!rowsByClase.has(cls.id)) rowsByClase.set(cls.id, []);
       rowsByClase.get(cls.id)!.push(row);
