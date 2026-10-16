@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp, usePref } from "../data/store";
-import { Avatar, Empty, Icon, Segmented } from "../components/ui";
+import { Avatar, Empty, Icon, Segmented, Sheet } from "../components/ui";
 import { Radar, type Series } from "../components/Radar";
 import { LevelBar, MetricBars } from "../components/Charts";
 import { SIN_CARRERA, SIN_GRUPO, avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, normText, plural, sparseMetrics, type Row } from "../lib/metrics";
 import { SERIES_COLORS, byClase, byDecano, byField, byMaestro, type Group } from "../lib/groups";
 import { PageHead } from "./Dashboard";
 import FilterBar from "../components/FilterBar";
-import { useScoped } from "../lib/scope";
+import { scopeCount, useScoped } from "../lib/scope";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 
 const MAX = 8;
@@ -17,7 +17,7 @@ type Kind = "clase" | "maestro" | "decano" | "carrera" | "grupo" | "equipo" | "e
 export default function Comparar() {
   const { snap: snapAll, metrics, user } = useApp();
   // se compara dentro del ámbito elegido (mismos filtros que Inicio y Estudiantes)
-  const { rows, rowsByClase, clases, active: scoped, allRows } = useScoped();
+  const { rows, rowsByClase, clases, active: scoped, allRows, scope } = useScoped();
   const snap = useMemo(() => ({ ...snapAll, clases }), [snapAll, clases]);
   const [params, setParams] = useSearchParams();
   const [saved, setSaved] = usePref<string[]>("cmpSel_" + user!.id, []);
@@ -26,6 +26,16 @@ export default function Comparar() {
   const [tab, setTab] = useState<Kind>("clase");
   const [q, setQ] = useState("");
   const [hideSparse, setHideSparse] = useState(true);
+  const [picker, setPicker] = useState(false);
+  const [bdOpen, setBdOpen] = useState(false);
+  const bdRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!bdOpen) return;
+    const close = (e: MouseEvent) => { if (!bdRef.current?.contains(e.target as Node)) setBdOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [bdOpen]);
+  const [showFilter, setShowFilter] = useState(false);
   const rol = user!.rol;
 
   const pool = useMemo(() => {
@@ -92,19 +102,83 @@ export default function Comparar() {
 
   return (
     <>
-      <PageHead title="Comparar" sub={`Elige hasta 8 elementos: clases, ${low(M().many)}, carreras, grupos, equipos o estudiantes. Con los filtros de abajo comparas dentro de una clase, una carrera o lo que necesites.`} />
-      <FilterBar summary={scoped ? <>Comparando dentro de <b>{plural(rows.length, "estudiante", "estudiantes")}</b></> : undefined} />
+      <PageHead title="Comparar" sub="Elige qué comparar. Usa el filtro si quieres mirar dentro de una clase, una carrera o un equipo." />
 
-      <div className="cmp">
-        <aside className="card cmp-pick">
-          <div className="cmp-tabs">{tabs.map((t) => <button key={t.value} type="button" className={"ctab" + (tab === t.value ? " on" : "")} onClick={() => { setTab(t.value); setQ(""); }}>{t.label}</button>)}</div>
+      <section className="card pad composer">
+        <div className="composer-h">
+          <h3>Comparando{chosen.length > 0 && <span className="count-pill">{chosen.length}/{MAX}</span>}</h3>
+          <div className="composer-actions">
+            {breakdown.length > 0 && (
+              <div className="fmenu" ref={bdRef}>
+                <button className={"fbtn" + (bdOpen ? " open" : "")} onClick={() => setBdOpen(!bdOpen)}>Desglosar por<Icon name="chevron" size={12} /></button>
+                {bdOpen && (
+                  <div className="fpop bdpop">
+                    <p className="muted tiny pad-x">Compara todos los grupos de un tipo{scoped ? " dentro del filtro" : ""}</p>
+                    {breakdown.map((d) => (
+                      <button key={d.kind} className="fopt-btn" onClick={() => { setSel(d.ids); setBdOpen(false); }}>
+                        <span>{d.label}</span><small>{d.ids.length === MAX ? `los ${MAX} mayores` : d.ids.length}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <button className={"fbtn" + (showFilter || scoped ? " on" : "")} onClick={() => setShowFilter(!showFilter)}>
+              <Icon name="search" size={13} className="noturn" /> Filtrar{scoped && <b>{scopeCount(scope)}</b>}</button>
+            <button className="btn primary sm" onClick={() => setPicker(true)} disabled={valid.length >= MAX}><Icon name="plus" size={14} /> Añadir</button>
+          </div>
+        </div>
+
+        {(showFilter || scoped) && <div className="composer-filter"><FilterBar summary={scoped ? <>Comparando dentro de <b>{plural(rows.length, "estudiante", "estudiantes")}</b></> : undefined} /></div>}
+
+        {chosen.length === 0 ? (
+          <div className="composer-empty">
+            <p>Aún no hay nada que comparar. Empieza con un clic:</p>
+            <div className="row-gap wrap">
+              {breakdown.slice(0, 4).map((d) => <button key={d.kind} className="bd" onClick={() => setSel(d.ids)}>Por {low(d.label)}<small>{d.ids.length}</small></button>)}
+              <button className="bd" onClick={() => setPicker(true)}><Icon name="plus" size={13} /> Elegir a mano</button>
+            </div>
+          </div>
+        ) : (
+          <div className="series-grid">
+            {chosen.map((g) => (
+              <div className="scard" key={g.id} style={{ ["--c" as string]: g.color }}>
+                <button className="scard-x" onClick={() => toggle(g.id)} aria-label={"Quitar " + g.label}><Icon name="close" size={12} /></button>
+                <div className="scard-h"><span className="dot" style={{ background: g.color }} /><b title={g.label}>{g.label}</b></div>
+                <div className="scard-v">{fmt(g.idx)}<small>{g.rows.length} est.</small></div>
+                <LevelBar rows={g.rows as Row[]} />
+              </div>
+            ))}
+            {valid.length < MAX && <button className="scard add" onClick={() => setPicker(true)}><Icon name="plus" size={18} /><span>Añadir</span></button>}
+          </div>
+        )}
+        {chosen.length > 1 && <button className="link small composer-clear" onClick={() => setSel([])}>Quitar todo</button>}
+      </section>
+
+      {chosen.length > 0 && (
+        <section className="card pad">
+          <div className="card-h">
+            <Segmented value={view} onChange={setView} options={[{ value: "radar", label: "Araña" }, { value: "barras", label: "Barras" }, { value: "tabla", label: "Tabla" }]} />
+            <label className="switch-label"><input type="checkbox" className="switch" checked={hideSparse} onChange={(e) => setHideSparse(e.target.checked)} /> Ocultar competencias casi vacías</label>
+          </div>
+          {view === "radar" && <Radar labels={labels} series={series} invert={invert} onInvert={setInvert} size={640} title="comparacion" />}
+          {view === "barras" && <MetricBars labels={labels} series={series} />}
+          {view === "tabla" && <DiffTable labels={labels} chosen={chosen.map((g) => ({ label: g.label, color: g.color, values: vecFor(g.vector) }))} />}
+        </section>
+      )}
+
+      {/* ---------- Panel lateral para añadir elementos ---------- */}
+      <Sheet open={picker} onClose={() => { setPicker(false); setQ(""); }} title={<b className="sheet-t">Añadir a la comparación <span className="muted">{valid.length}/{MAX}</span></b>}>
+        <div className="picker">
+          <div className="cmp-tabs">{tabs.map((t) => (
+            <button key={t.value} type="button" className={"ctab" + (tab === t.value ? " on" : "")} onClick={() => { setTab(t.value); setQ(""); }}>{t.label}</button>))}</div>
           <label className="search"><Icon name="search" size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === "est" ? "Nombre o matrícula" : "Filtrar"} /></label>
-          <div className="cmp-list">
-            {(tab === "est" ? options.slice(0, 60) : options).map((g) => {
+          <div className="picker-list">
+            {(tab === "est" ? (n ? options.slice(0, 60) : []) : options).map((g) => {
               const on = valid.includes(g.id), i = valid.indexOf(g.id);
               return (
                 <button key={g.id} type="button" className={"cmp-opt" + (on ? " on" : "")} onClick={() => toggle(g.id)} disabled={!on && valid.length >= MAX}>
-                  {g.kind === "maestro" || g.kind === "decano" || g.kind === "estudiante" ? <Avatar name={g.label} size={26} color={on ? SERIES_COLORS[i % SERIES_COLORS.length] : undefined} />
+                  {g.kind === "maestro" || g.kind === "decano" || g.kind === "estudiante" ? <Avatar name={g.label} size={28} color={on ? SERIES_COLORS[i % SERIES_COLORS.length] : undefined} />
                     : <span className="sw" style={{ background: on ? SERIES_COLORS[i % SERIES_COLORS.length] : g.kind === "clase" ? g.color : "var(--fill-3)" }} />}
                   <span className="rank-txt"><b>{g.label}</b><small>{g.sub}</small></span>
                   <span className={"check" + (on ? " on" : "")}>{on && <Icon name="check" size={13} />}</span>
@@ -114,57 +188,14 @@ export default function Comparar() {
             {tab === "est" && !n && <p className="muted small pad-x">Escribe para buscar entre {rows.length} estudiantes.</p>}
             {!options.length && n && <p className="muted small pad-x">Sin coincidencias.</p>}
           </div>
-          <div className="cmp-presets">
+          <div className="picker-refs">
             <span className="muted tiny">Referencias</span>
             <button className="pill btnish" onClick={() => addRef("todos")}>+ {scoped ? "Promedio del filtro" : "Promedio general"}</button>
             {scoped && <button className="pill btnish" onClick={() => addRef("global")}>+ Todo (sin filtros)</button>}
           </div>
-        </aside>
-
-        <section className="cmp-main">
-          {breakdown.length > 0 && (
-            <div className="breakdown">
-              <span className="muted small">Desglosar{scoped ? " este filtro" : ""} por</span>
-              {breakdown.map((d) => <button key={d.kind} className={"bd" + (valid.length > 1 && valid.every((id) => pool.get(id)?.kind === d.kind) ? " on" : "")}
-                onClick={() => setSel(d.ids)}>{d.label}<small>{d.ids.length}</small></button>)}
-            </div>
-          )}
-          <div className="sel-chips">
-            {chosen.map((g) => (
-              <span key={g.id} className="schip" style={{ ["--c" as string]: g.color }}>
-                <span className="dot" style={{ background: g.color }} />{g.label}
-                <button onClick={() => toggle(g.id)} aria-label={"Quitar " + g.label}><Icon name="close" size={12} /></button>
-              </span>
-            ))}
-            {chosen.length > 0 && <button className="link small" onClick={() => setSel([])}>Limpiar</button>}
-          </div>
-
-          {chosen.length === 0 ? <Empty icon="compare" title="Elige qué comparar">Selecciona elementos en el panel o usa un atajo.</Empty> : (
-            <>
-              <div className="cmp-cards">
-                {chosen.map((g) => (
-                  <div className="card mini" key={g.id} style={{ ["--c" as string]: g.color }}>
-                    <div className="mini-h"><span className="dot" style={{ background: g.color }} /><b>{g.label}</b></div>
-                    <div className="mini-v">{fmt(g.idx)}<small> índice</small></div>
-                    <LevelBar rows={g.rows as Row[]} />
-                    <small className="muted">{g.rows.length} est. · {g.lv.total ? Math.round((g.lv.alto / g.lv.total) * 100) : 0}% alto · {g.lv.total ? Math.round((g.lv.bajo / g.lv.total) * 100) : 0}% bajo</small>
-                  </div>
-                ))}
-              </div>
-
-              <div className="card pad">
-                <div className="card-h">
-                  <Segmented value={view} onChange={setView} options={[{ value: "radar", label: "Araña" }, { value: "barras", label: "Barras" }, { value: "tabla", label: "Tabla" }]} />
-                  <label className="switch-label"><input type="checkbox" className="switch" checked={hideSparse} onChange={(e) => setHideSparse(e.target.checked)} /> Ocultar competencias casi vacías</label>
-                </div>
-                {view === "radar" && <Radar labels={labels} series={series} invert={invert} onInvert={setInvert} size={620} />}
-                {view === "barras" && <MetricBars labels={labels} series={series} />}
-                {view === "tabla" && <DiffTable labels={labels} chosen={chosen.map((g) => ({ label: g.label, color: g.color, values: vecFor(g.vector) }))} />}
-              </div>
-            </>
-          )}
-        </section>
-      </div>
+          <button className="btn primary full" onClick={() => { setPicker(false); setQ(""); }}>Listo</button>
+        </div>
+      </Sheet>
     </>
   );
 }
