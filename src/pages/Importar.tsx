@@ -2,7 +2,8 @@
    - Listados de estudiantes (ADM535, lista del juego, recopilaciones propias): se reconocen las
      columnas, se unen al directorio y se pueden deshacer o reajustar.
    - Informes del juego: cada estudiante se enlaza con el directorio (seguro → solo; dudoso → se pregunta).
-   - Directorio: tabla editable, completar en bloque, descargar lo incompleto y aplicar a clases ya cargadas. */
+   - Directorio: tabla editable, completar en bloque, descargar lo incompleto y aplicar a clases ya cargadas.
+   - Extensión de Chrome de Marketplace: el informe llega por mensaje y entra como borrador (ver lib/marketplace.ts). */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp, usePref } from "../data/store";
@@ -18,6 +19,7 @@ import { PALETTE } from "../data/demoSeed";
 import { PageHead } from "./Dashboard";
 import { D, low } from "../lib/labels";
 import { friendlyError } from "../data/api";
+import { MSG, checkPayload, payloadToFile } from "../lib/marketplace";
 
 type Est = ClaseDraft["estudiantes"][number];
 /** Enlace de un estudiante del informe con el directorio */
@@ -53,6 +55,30 @@ export default function Importar() {
 
   useEffect(() => { api.loadRoster().then((r) => { setRoster(r); setLoaded(true); }).catch(() => setLoaded(true)); }, [api]);
 
+  /* Informe enviado por la extensión de Marketplace: se valida, se confirma su recepción
+     y pasa al importador como cualquier archivo (vista previa; no se guarda solo). */
+  const [incoming, setIncoming] = useState<File[]>([]);
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    const receive = async (ev: MessageEvent) => {
+      if (ev.source !== window || ev.origin !== location.origin || ev.data?.type !== MSG.import) return;
+      const c = checkPayload(ev.data.payload);
+      if (!c.ok) { toast(c.error, "error"); return; }
+      if (seen.current.has(c.payload.requestId)) return;
+      seen.current.add(c.payload.requestId);
+      window.postMessage({ type: MSG.received, requestId: c.payload.requestId }, location.origin);
+      try {
+        const file = await payloadToFile(c.payload);
+        setTab("importar");
+        setIncoming((f) => [...f, file]);
+        toast(`Recibido desde Marketplace: ${plural(c.estudiantes, "estudiante", "estudiantes")}. Revisa y guarda.`);
+      } catch (e) { seen.current.delete(c.payload.requestId); toast(friendlyError(e), "error"); }
+    };
+    window.addEventListener("message", receive);
+    window.postMessage({ type: MSG.ready }, location.origin);   // la extensión espera esta señal para enviar
+    return () => window.removeEventListener("message", receive);
+  }, []); // eslint-disable-line
+
   /** Guarda el directorio y vuelve a enlazar los informes pendientes */
   const persist = async (list: RosterEntry[], ok?: string) => {
     setRoster(list);
@@ -70,7 +96,8 @@ export default function Importar() {
         <Segmented value={tab} onChange={setTab} options={[{ value: "importar", label: "Importar archivos" }, { value: "directorio", label: `Directorio${loaded ? ` (${roster.length})` : ""}` }]} />
       </div>
       {tab === "importar"
-        ? <ImportTab roster={roster} persist={persist} jobs={jobs} setJobs={setJobs} drafts={drafts} setDrafts={setDrafts} goDir={() => setTab("directorio")} />
+        ? <ImportTab roster={roster} persist={persist} jobs={jobs} setJobs={setJobs} drafts={drafts} setDrafts={setDrafts} goDir={() => setTab("directorio")}
+            incoming={loaded ? incoming : []} onIncoming={() => setIncoming([])} />
         : <DirectoryTab roster={roster} persist={persist} refresh={refresh} snap={snap} />}
     </>
   );
@@ -79,10 +106,12 @@ export default function Importar() {
 /* =====================================================================
    Pestaña 1 · Importar archivos
    ===================================================================== */
-function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir }: {
+function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, incoming, onIncoming }: {
   roster: RosterEntry[]; persist(l: RosterEntry[], ok?: string): Promise<void>;
   jobs: ListJob[]; setJobs: React.Dispatch<React.SetStateAction<ListJob[]>>;
   drafts: Draft[]; setDrafts: React.Dispatch<React.SetStateAction<Draft[]>>; goDir(): void;
+  /** Archivos recibidos de la extensión, listos para procesar (el directorio ya está cargado) */
+  incoming: File[]; onIncoming(): void;
 }) {
   const { api, snap, toast, refresh } = useApp();
   const go = useNavigate();
@@ -127,7 +156,7 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir }:
     reports.forEach((p, i) => {
       const rep = parseReport(p.rows);
       if (!rep) { toast(`"${p.file.name}" no tiene estudiantes (las filas EJEMPLO se ignoran).`, "error"); return; }
-      const nombre = p.file.name.replace(/\.(xlsx|xls|csv)$/i, "").replace(/^icompetencyreport-?/i, "Clase ").replace(/^plantilla-informe-competencias$/i, "Nueva clase");
+      const nombre = p.file.name.replace(/\.(xlsx|xls|csv)$/i, "").replace(/^icompetencyreport-?/i, "Clase ").replace(/^Informe_Competencias_/i, "").replace(/^plantilla-informe-competencias$/i, "Nueva clase");
       const same = snap.clases.find((c) => normText(c.nombre) === normText(nombre));
       const links = linkAll(rep.students, list);
       nd.push({ key: p.file.name + Date.now() + i, replaceId: same?.id ?? "", nombre, grupo: guessGroup(rep.students.map((s, j) => enrich(s, links[j]))),
@@ -137,6 +166,13 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir }:
     setDrafts((ds) => [...ds, ...nd]);
     setBusy(null);
   };
+
+  useEffect(() => {
+    if (!incoming.length) return;
+    const files = incoming;
+    onIncoming();
+    handle(files);   // mismos enlaces con el directorio, cálculos y vista previa que la carga manual
+  }, [incoming]); // eslint-disable-line
 
   /* --- listados: reajustar columnas, dar prioridad al archivo, deshacer --- */
   const redo = async (job: ListJob, patch: Partial<Pick<ListJob, "mapping" | "archivoManda">>) => {
