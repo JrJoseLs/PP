@@ -2,7 +2,7 @@
    políticas RLS de supabase/migrations/001_esquema.sql, para que el modo
    demo muestre fielmente lo que cada rol puede ver y hacer. */
 import type { Api } from "./api";
-import type { Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, Clase, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 import { buildDemo, type DemoDb } from "./demoSeed";
 
 const DB_KEY = "pp_demo_db_v1";
@@ -20,7 +20,7 @@ export class DemoApi implements Api {
   constructor() {
     let db: DemoDb | null = null;
     try { db = JSON.parse(localStorage.getItem(DB_KEY) || "null"); } catch { /* */ }
-    this.db = db && db.version === 2 ? db : buildDemo();
+    this.db = db && db.version === 3 ? db : buildDemo();
   }
   private save() { try { localStorage.setItem(DB_KEY, JSON.stringify(this.db)); } catch { /* lleno o bloqueado */ } }
   static reset() { try { localStorage.removeItem(DB_KEY); } catch { /* */ } }
@@ -64,7 +64,8 @@ export class DemoApi implements Api {
       maestros: u.rol === "maestro" ? c.maestros.filter((m) => m === u.id) : c.maestros,
     })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
     const ids = new Set(clases.map((c) => c.id));
-    return { profiles, clases, resultados: this.db.resultados.filter((r) => ids.has(r.clase_id)), carreras: this.db.carreras, ajustes: this.db.ajustes ?? {} };
+    return { profiles, clases, resultados: this.db.resultados.filter((r) => ids.has(r.clase_id)), carreras: this.db.carreras, ajustes: this.db.ajustes ?? {},
+      desempeno: (this.db.desempeno ?? []).filter((x) => ids.has(x.clase_id)), desempenoEquipos: (this.db.desempenoEquipos ?? []).filter((x) => ids.has(x.clase_id)) };
   }
 
   async createUser(n: NewUser) {
@@ -136,6 +137,15 @@ export class DemoApi implements Api {
     this.db.clases.push({ id, nombre: d.nombre, grupo: d.grupo, periodo: d.periodo, color: d.color, metrics: d.metrics,
       archivo: d.archivo, created_at: new Date().toISOString(), decanos: d.decanos, maestros: [] });
     d.estudiantes.forEach((e) => this.db.resultados.push({ ...e, id: "r-" + uid(), clase_id: id }));
+    this.save();
+    return id;
+  }
+  async saveDesempeno(claseId: string, jugadores: Omit<Desempeno, "id" | "clase_id">[], equipos: Omit<DesempenoEquipo, "clase_id">[]) {
+    await wait(160);
+    if (!this.isAdmin()) deny();
+    this.clase(claseId);
+    this.db.desempeno = [...(this.db.desempeno ?? []).filter((x) => x.clase_id !== claseId), ...jugadores.map((j) => ({ ...j, id: "d-" + uid(), clase_id: claseId }))];
+    this.db.desempenoEquipos = [...(this.db.desempenoEquipos ?? []).filter((x) => x.clase_id !== claseId), ...equipos.map((e) => ({ ...e, clase_id: claseId }))];
     this.save();
   }
   async replaceResultados(claseId: string, d: Pick<ClaseDraft, "metrics" | "estudiantes" | "archivo">) {

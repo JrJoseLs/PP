@@ -6,6 +6,7 @@ import { Ring } from "./Charts";
 import { avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
 import { metricDesc, metricName } from "../lib/labels";
 import { EditStudentModal } from "./ClassEditor";
+import { StudentGame } from "./GameCharts";
 
 export default function StudentSheet({ id, list, onNav, onClose }: { id: string; list: string[]; onNav(id: string): void; onClose(): void }) {
   const { rows, rowsByClase, user } = useApp();
@@ -56,6 +57,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
             {row.equipo && <span>Equipo {row.equipo}</span>}
             {row.r.matricula && <span>Mat. {row.r.matricula}</span>}
             {user?.rol === "admin" && <button className="link" onClick={() => setEditing((e) => !e)}><Icon name="edit" size={14} /> Editar</button>}
+            <button className="link no-print" onClick={() => window.print()} title="Imprimir o guardar como PDF para entregar al estudiante"><Icon name="download" size={14} /> Imprimir / PDF</button>
           </div>
         </div>
         <div className="st-score">
@@ -65,6 +67,8 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
       </div>
 
       {editing && <EditStudentModal row={row} onClose={() => setEditing(false)} />}
+
+      {row.juego && <StudentGame row={row} classRows={data.classRows} />}
 
       <div className="card pad">
         <div className="card-h">

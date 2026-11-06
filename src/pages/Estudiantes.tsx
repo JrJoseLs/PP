@@ -7,6 +7,7 @@ import FilterBar from "../components/FilterBar";
 import { EMPTY_SCOPE, useScoped } from "../lib/scope";
 import { displayName, fmt, isRisk, levelOf, metricLevel, metricValue, plural, sparseMetrics, type Row } from "../lib/metrics";
 import { PageHead } from "./Dashboard";
+import { fmtMin } from "../lib/game";
 import { metricDesc, metricName } from "../lib/labels";
 
 const PAGE = 100;
@@ -25,11 +26,14 @@ export default function Estudiantes() {
 
   const sparse = useMemo(() => sparseMetrics(allRows, metrics), [allRows, metrics]);
   const cols = metrics.filter((m) => !sparse.has(m));
+  // columnas del juego (tiempo y puntaje) solo si hay algún informe igrades importado
+  const conJuego = allRows.some((r) => r.juego);
 
   const list = useMemo(() => {
     const out = [...rows];
     const get = (r: Row): number | string => sort.k === "nombre" ? displayName(r.r.nombre) : sort.k === "clase" ? r.cls.nombre : sort.k === "carrera" ? r.carrera
-      : sort.k === "indice" ? r.indice ?? -1 : metricValue(r, sort.k) ?? -1;
+      : sort.k === "indice" ? r.indice ?? -1 : sort.k === "minutos" ? r.juego?.minutos ?? -1 : sort.k === "puntaje" ? r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? -1
+      : metricValue(r, sort.k) ?? -1;
     return out.sort((a, b) => { const x = get(a), y = get(b); return (typeof x === "string" ? x.localeCompare(y as string, "es") : x - (y as number)) * sort.dir; });
   }, [rows, sort]);
   useEffect(() => setLimit(PAGE), [rows]);
@@ -41,7 +45,9 @@ export default function Estudiantes() {
   const exportXlsx = async () => {
     const XLSX = await import("xlsx");
     const data = list.map((r) => {
-      const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Equipo: r.equipo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "" };
+      const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Equipo: r.equipo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "",
+        "Tiempo en el juego [min]": r.juego?.minutos === null || r.juego?.minutos === undefined ? null : Math.round(r.juego.minutos),
+        "Puntaje del juego": r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null, "Scorecard acumulado (equipo)": r.juego?.bsc_acum ?? null };
       metrics.forEach((m) => { o[metricName(m)] = metricValue(r, m); });
       return o;
     });
@@ -65,7 +71,8 @@ export default function Estudiantes() {
           <table className={"etable" + (mode === "mapa" ? " heat" : "")}>
             <thead><tr>
               {th("nombre", "Estudiante", "sticky")}
-              {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th><th className="hide-sm">Equipo</th>{th("indice", "Índice", "num")}<th>Nivel</th></>
+              {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th><th className="hide-sm">Equipo</th>{th("indice", "Índice", "num")}<th>Nivel</th>
+                {conJuego && <>{th("minutos", "Tiempo", "num hide-sm")}{th("puntaje", "Puntaje", "num hide-sm")}</>}</>
                 : <>{th("indice", "Índice", "num")}{cols.map((m) => <th key={m} className="vert" title={metricName(m) + (metricDesc(m) ? " · " + metricDesc(m) : "")}><button className={"th" + (sort.k === m ? " on" : "")} onClick={() => setSort({ k: m, dir: sort.k === m ? (-sort.dir as 1 | -1) : -1 })}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></button></th>)}</>}
             </tr></thead>
             <tbody>
@@ -79,6 +86,10 @@ export default function Estudiantes() {
                     <td className="muted hide-sm">{r.equipo || "—"}</td>
                     <td className="num"><span className="idxbar"><i style={{ width: (r.indice ?? 0) + "%" }} /></span><b>{fmt(r.indice)}</b></td>
                     <td><LevelChip v={r.indice} /></td>
+                    {conJuego && <>
+                      <td className="num muted hide-sm">{fmtMin(r.juego?.minutos)}</td>
+                      <td className="num hide-sm">{fmt(r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null)}</td>
+                    </>}
                   </> : <>
                     <td className={"num hc " + (levelOf(r.indice)?.id ?? "")}><b>{fmt(r.indice, 0)}</b></td>
                     {cols.map((m) => { const v = metricValue(r, m); return <td key={m} className={"num hc " + (metricLevel(m, v)?.id ?? "")}>{fmt(v, 0)}</td>; })}

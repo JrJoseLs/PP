@@ -948,3 +948,77 @@ button.ms { cursor: pointer; }
 .plan-list ul { list-style: none; padding: 0; margin: 6px 0 12px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; max-height: 38vh; overflow-y: auto; }
 .plan-list li { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 9px; background: var(--fill-1); }
 @media (max-width: 600px) { .edit-grid { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Desempeño en el juego (igrades) ---------- */
+.gamecard { border-left-color: var(--warn); }
+.game-sec .game-kpis { margin-bottom: 8px; }
+.game-sec .game-kpis .stat { background: var(--fill-1); box-shadow: none; }
+.tscatter-plot { position: relative; }
+.tscatter svg { width: 100%; height: auto; display: block; }
+.tscatter .qz { fill: transparent; }
+.tscatter .qz.q1 { fill: color-mix(in srgb, var(--good) 7%, transparent); }
+.tscatter .qz.q2 { fill: color-mix(in srgb, var(--warn) 9%, transparent); }
+.tscatter .qz.q3 { fill: color-mix(in srgb, var(--bad) 6%, transparent); }
+.tscatter .gl { stroke: var(--sep); }
+.tscatter .med { stroke: var(--text-3); stroke-dasharray: 4 4; }
+.tscatter .tk { font-size: 10.5px; fill: var(--text-3); }
+.tscatter .ax { font-size: 11.5px; fill: var(--text-2); font-weight: 500; }
+.tscatter .ql { font-size: 11px; fill: var(--text-3); font-weight: 600; }
+.tscatter .ql.warn { fill: var(--warn-ink); }
+.tscatter .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
+.tscatter .legend .lg { padding: 0; cursor: default; }
+.tscatter .dot-pt { stroke: var(--card); stroke-width: 1.5; cursor: pointer; transition: r .12s; opacity: .9; }
+.ts-tip { position: absolute; transform: translate(12px, -50%); pointer-events: none; z-index: 3; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: 10px; background: var(--elev); box-shadow: var(--shadow-2); border: 1px solid var(--sep); font-size: 12.5px; white-space: nowrap; }
+.ts-tip span { color: var(--text-3); font-size: 12px; }
+.tboard { display: flex; flex-direction: column; font-size: 13.5px; }
+.tb-row { display: grid; grid-template-columns: minmax(150px, 1.3fr) 2fr 1.2fr 70px 70px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--sep); }
+.tb-row:last-of-type { border-bottom: 0; }
+.tb-h { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.tb-h .mk { display: inline-block; width: 2px; height: 11px; background: var(--text); vertical-align: -1px; margin: 0 4px; }
+.tb-n { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tb-n b { width: 18px; color: var(--text-3); font-size: 12px; text-align: center; }
+.tb-bar { position: relative; height: 16px; border-radius: 5px; background: var(--fill-1); }
+.tb-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; opacity: .85; transition: width .5s var(--ease); }
+.tb-bar.time i { background: var(--text-3); opacity: .45; }
+.tb-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); border-radius: 1px; }
+.tb-bar small { position: absolute; right: 6px; top: 0; line-height: 16px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tboard .num { text-align: right; }
+.sgame h3 { margin-bottom: 6px; }
+.sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
+.sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+.sg-bar { display: grid; grid-template-columns: 210px 1fr 90px; gap: 10px; align-items: center; font-size: 13px; color: var(--text-2); }
+.sg-bar b { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.sg-track { height: 10px; border-radius: 980px; background: var(--fill-1); overflow: hidden; }
+.sg-track i { display: block; height: 100%; border-radius: 980px; background: var(--fill-3); }
+.sg-track i.me { background: var(--accent); }
+.sg-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.sg-kpis > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); }
+.sg-kpis small { font-size: 11.5px; color: var(--text-3); }
+.sg-kpis b { font: 700 20px var(--font-d); font-variant-numeric: tabular-nums; }
+.sg-kpis em { font-style: normal; font-size: 11.5px; color: var(--text-3); }
+.gbars { display: flex; flex-direction: column; gap: 6px; }
+.gb-block .mbar-tracks { margin-right: 80px; }
+.mbar-track em.wide { right: -78px; width: 74px; }
+@media (max-width: 700px) { .tb-row { grid-template-columns: 1fr 1.4fr 60px; } .tb-row > :nth-child(3), .tb-row > :nth-child(5) { display: none; } .sg-bar { grid-template-columns: 1fr 80px; } .sg-bar .sg-track { grid-column: 1 / -1; grid-row: 2; } .sg-kpis { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Impresión: la ficha del estudiante sola, lista para entregar ---------- */
+@media print {
+  @page { margin: 14mm; }
+  /* en papel siempre con los colores del tema claro */
+  :root, :root[data-theme="dark"] {
+    --bg: #fff; --card: #fff; --elev: #fff; --text: #1d1d1f; --text-2: #424245; --text-3: #6e6e73; --sep: rgba(0,0,0,.12);
+    --fill-1: rgba(120,120,128,.08); --fill-2: rgba(120,120,128,.14); --fill-3: rgba(120,120,128,.28);
+    --good-ink: #17742f; --bad-ink: #c4001a; --r-good: #E2EDE4; --r-mid: #FFFEF9; --r-bad: #F6E1D9; --r-grid: #DAD3C2; --r-ink: #22261F; --r-risk: #8A3A2A;
+    color-scheme: light;
+  }
+  .st-meta .link, .seg, .radar-legend button { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .st-meta .link, .card-h .seg { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff !important; color: #000; }
+  .sidebar, .mobile-top, .tabbar, .main, .toasts, .no-print, .sheet-h { display: none !important; }
+  .sheet-backdrop { position: static !important; background: none !important; backdrop-filter: none !important; }
+  .sheet { position: static !important; width: 100% !important; height: auto !important; box-shadow: none !important; border-radius: 0 !important; animation: none !important; background: #fff !important; }
+  .sheet-body { overflow: visible !important; padding: 0 !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd; break-inside: avoid; }
+  .radar-tools, .radar-tip { display: none !important; }
+}

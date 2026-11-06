@@ -1,6 +1,6 @@
 /* Datos de ejemplo: 4 decanos, 16 maestros, 16 clases, ~400 estudiantes.
    Generados con semilla fija para que todos vean lo mismo. Nada es real. */
-import type { Ajustes, Carrera, Clase, Profile, Resultado, RosterEntry } from "../lib/types";
+import type { Ajustes, Carrera, Clase, Desempeno, DesempenoEquipo, Profile, Resultado, RosterEntry } from "../lib/types";
 import { METRICS_FALLBACK, displayName, isRisk, normText } from "../lib/metrics";
 
 export interface DemoDb {
@@ -11,6 +11,8 @@ export interface DemoDb {
   carreras: Carrera[];
   roster: RosterEntry[];
   ajustes?: Ajustes;
+  desempeno?: Desempeno[];
+  desempenoEquipos?: DesempenoEquipo[];
 }
 
 function rng(seed: number) {
@@ -48,6 +50,7 @@ export function buildDemo(): DemoDb {
   const profiles: DemoDb["profiles"] = [{ id: "u-admin", usuario: "admin", nombre: "Administración", rol: "admin", decano_id: null, activo: true, password: "demo" }];
   const clases: Clase[] = [], resultados: Resultado[] = [], carreras: Carrera[] = [];
   const roster: DemoDb["roster"] = [];
+  const jugadores: Desempeno[] = [], equiposJuego: DesempenoEquipo[] = [];
   let ci = 0, ri = 0;
   const metrics = METRICS_FALLBACK;
 
@@ -94,10 +97,24 @@ export function buildDemo(): DemoDb {
         // directorio de ejemplo: con algunos huecos para mostrar cómo se completan
         roster.push({ nombre: displayName(nombre), matricula, carrera: r() < 0.08 ? "" : carrera, grupo, equipo,
           email: r() < 0.7 ? normText(displayName(nombre)).toLowerCase().split(" ").slice(0, 2).join(".") + "@universidad.edu" : "", licencia: "" });
+        // desempeño en el juego (informe igrades): el tiempo crece con el esfuerzo, el puntaje con la habilidad
+        jugadores.push({ id: id("d", ri), clase_id: cId, nombre: displayName(nombre), email: "", equipo, trimestres: 6, bsc_acum: null, bsc: null,
+          minutos: Math.max(0, Math.round(320 + effort * 260 + a * 70 + gauss() * 130)), puntaje: Math.round(Math.max(40, Math.min(100, 62 + a * 12 + gauss() * 7)) * 100) / 100, puntaje_ajustado: null, _a: a } as Desempeno & { _a: number });
       }
+      // Scorecard por equipo: acumulado según la habilidad media del equipo; el del trimestre oscila alrededor
+      teams.forEach((t) => {
+        const js = jugadores.filter((j) => j.equipo === t && j.clase_id === cId) as (Desempeno & { _a: number })[];
+        if (!js.length) return;
+        const aMed = js.reduce((s, j) => s + j._a, 0) / js.length;
+        const bscAcum = Math.round(Math.max(5, 38 + aMed * 14 + gauss() * 6) * 100) / 100;
+        const bsc = Math.round(bscAcum * (0.75 + r() * 0.6) * 100) / 100;
+        js.forEach((j) => { j.bsc_acum = bscAcum; j.bsc = bsc; delete (j as Partial<typeof j>)._a; });
+        equiposJuego.push({ clase_id: cId, equipo: t, trimestres: 6, bsc_acum: bscAcum, bsc, minutos: js.reduce((s, j) => s + (j.minutos ?? 0), 0),
+          percentil: Math.round(Math.max(1, Math.min(99, 50 + aMed * 30 + gauss() * 10))), puntaje: Math.round((js.reduce((s, j) => s + (j.puntaje ?? 0), 0) / js.length) * 100) / 100 });
+      });
     });
   });
-  return { version: 2, profiles, clases, resultados, carreras, roster, ajustes: {} };
+  return { version: 3, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
 }
 
 export const DEMO_ACCOUNTS = [

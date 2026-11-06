@@ -11,12 +11,14 @@ import { PageHead } from "./Dashboard";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
 import { GridEditor, ReuploadButton } from "../components/ClassEditor";
+import { TeamBoard, TimeScatter } from "../components/GameCharts";
+import { fmtMin } from "../lib/game";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
 
 export default function ClaseDetalle() {
   const { id } = useParams();
-  const { snap, rows, rowsByClase, user, run } = useApp();
+  const { snap, rows, rowsByClase, user, run, juegoByClase } = useApp();
   const { openStudent } = useShell();
   const go = useNavigate();
   const [invert, setInvert] = usePref("radarInvert", true);
@@ -37,6 +39,7 @@ export default function ClaseDetalle() {
     return { labels: c.metrics.filter((m) => !sparse.has(m)), rr, vec, all, comp, idx: avgIndex(rr), sd: stdev(idxs), lv: levelCounts(rr), carreras: byField(rr, "carrera"), equipos: byField(rr, "equipo") };
   }, [c, rows, rowsByClase]);
 
+  const juego = c ? juegoByClase.get(c.id) : undefined;
   if (!c || !d) return <Empty icon="classes" title="Clase no encontrada"><Link className="btn" to="/clases">Volver a clases</Link></Empty>;
 
   const sorted = [...d.rr].sort((a, b) => {
@@ -110,6 +113,28 @@ export default function ClaseDetalle() {
           </div>
         </section>
       ))}
+
+      {juego && (juego.jugadores.length > 0 || juego.equipos.length > 0) && (() => {
+        const conT = d.rr.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined);
+        const total = juego.jugadores.reduce((a, j) => a + (j.minutos ?? 0), 0);
+        const prom = juego.jugadores.length ? total / juego.jugadores.length : null;
+        const bscs = juego.equipos.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
+        const pun = juego.jugadores.map((j) => j.puntaje_ajustado ?? j.puntaje).filter((x): x is number => x !== null);
+        return (
+          <section className="card pad game-sec">
+            <div className="card-h"><h3><Icon name="bolt" size={18} /> Desempeño en el juego</h3><span className="muted small">Informe igrades · tiempo, Scorecard y puntajes</span></div>
+            <div className="stats game-kpis">
+              <Stat label="Tiempo promedio" value={fmtMin(prom)} sub="por estudiante" />
+              <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.jugadores.length, "jugador", "jugadores")} />
+              <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={`promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
+              <Stat label="Puntaje del juego" value={fmt(pun.length ? pun.reduce((a, b) => a + b, 0) / pun.length : null)} sub="promedio de la clase" />
+            </div>
+            {conT.length > 0 && <><h4 className="sub-h">Tiempo invertido vs. resultado</h4><TimeScatter rows={conT} onPick={(r) => openStudent(r.r.id, conT.map((x) => x.r.id))} /></>}
+            {juego.equipos.length > 0 && <><h4 className="sub-h">Equipos</h4><TeamBoard equipos={juego.equipos} /></>}
+            {juego.sinEnlace.length > 0 && <p className="muted tiny">{plural(juego.sinEnlace.length, "jugador del informe no se enlazó", "jugadores del informe no se enlazaron")} con un estudiante de esta clase: {juego.sinEnlace.slice(0, 5).map((j) => displayName(j.nombre)).join(", ")}{juego.sinEnlace.length > 5 ? "…" : ""}.</p>}
+          </section>
+        );
+      })()}
 
       <section className="card">
         <div className="card-h pad-x"><h3>Estudiantes</h3>

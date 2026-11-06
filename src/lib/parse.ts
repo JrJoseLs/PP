@@ -6,6 +6,12 @@ import { isExample } from "./templates";
 
 type Rows = unknown[][];
 
+/** Todas las hojas del libro (el informe igrades trae dos: equipos y jugadores) */
+export async function readBook(file: File): Promise<Record<string, Rows>> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+  return Object.fromEntries(wb.SheetNames.map((n) => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, raw: true }) as Rows]));
+}
 export async function readSheet(file: File): Promise<Rows> {
   const XLSX = await import("xlsx");
   const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });

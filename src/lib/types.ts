@@ -52,6 +52,31 @@ export interface ResultadoPatch { id: string; matricula?: string; carrera?: stri
 /** Ajustes de la plataforma: nombres visibles de roles y competencias */
 export type Ajustes = { roles?: unknown; competencias?: Record<string, string> } & Record<string, unknown>;
 
+/** Desempeño en el juego de un jugador (informe «igrades»). El enlace con su estudiante se calcula al cargar. */
+export interface Desempeno {
+  id: string;
+  clase_id: string;
+  nombre: string;
+  email: string;
+  equipo: string;
+  trimestres: number | null;
+  bsc_acum: number | null;         // Balanced Scorecard acumulado de su equipo
+  bsc: number | null;              // Balanced Scorecard del último trimestre de su equipo
+  minutos: number | null;          // tiempo propio
+  puntaje: number | null;          // puntuación calculada automáticamente
+  puntaje_ajustado: number | null; // ajustada por el instructor
+}
+export interface DesempenoEquipo {
+  clase_id: string;
+  equipo: string;
+  trimestres: number | null;
+  bsc_acum: number | null;
+  bsc: number | null;
+  minutos: number | null;          // tiempo total del equipo
+  percentil: number | null;
+  puntaje: number | null;
+}
+
 /** Lo que el usuario actual puede ver (ya filtrado por permisos) */
 export interface Snapshot {
   profiles: Profile[];
@@ -59,6 +84,8 @@ export interface Snapshot {
   resultados: Resultado[];
   carreras: Carrera[];
   ajustes: Ajustes;
+  desempeno: Desempeno[];
+  desempenoEquipos: DesempenoEquipo[];
 }
 
 export interface NewUser {

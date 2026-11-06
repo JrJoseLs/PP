@@ -10,7 +10,9 @@ import { useApp, usePref } from "../data/store";
 import { Avatar, Icon, Segmented } from "../components/ui";
 import { Radar } from "../components/Radar";
 import { Ring } from "../components/Charts";
-import { guessGroup, parseReport, readSheet } from "../lib/parse";
+import { guessGroup, parseReport, readBook } from "../lib/parse";
+import { parseIgrades } from "../lib/game";
+import { GameCard, suggestTarget, type GameJob } from "../components/GameImport";
 import { generalIndex, mean, fmt, normText, plural, displayName } from "../lib/metrics";
 import { downloadDirectory, downloadReportTemplate, downloadRosterTemplate } from "../lib/templates";
 import { Directory, FIELD_LABEL, completeness, detectFile, extractPeople, mergePeople, syncPatches, type Field, type Found, type MergeResult } from "../lib/directory";
@@ -52,6 +54,7 @@ export default function Importar() {
   const [loaded, setLoaded] = useState(false);
   const [jobs, setJobs] = useState<ListJob[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [games, setGames] = useState<GameJob[]>([]);
 
   useEffect(() => { api.loadRoster().then((r) => { setRoster(r); setLoaded(true); }).catch(() => setLoaded(true)); }, [api]);
 
@@ -97,7 +100,7 @@ export default function Importar() {
       </div>
       {tab === "importar"
         ? <ImportTab roster={roster} persist={persist} jobs={jobs} setJobs={setJobs} drafts={drafts} setDrafts={setDrafts} goDir={() => setTab("directorio")}
-            incoming={loaded ? incoming : []} onIncoming={() => setIncoming([])} />
+            incoming={loaded ? incoming : []} onIncoming={() => setIncoming([])} games={games} setGames={setGames} />
         : <DirectoryTab roster={roster} persist={persist} refresh={refresh} snap={snap} />}
     </>
   );
@@ -106,14 +109,16 @@ export default function Importar() {
 /* =====================================================================
    Pestaña 1 · Importar archivos
    ===================================================================== */
-function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, incoming, onIncoming }: {
+function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, incoming, onIncoming, games, setGames }: {
   roster: RosterEntry[]; persist(l: RosterEntry[], ok?: string): Promise<void>;
   jobs: ListJob[]; setJobs: React.Dispatch<React.SetStateAction<ListJob[]>>;
   drafts: Draft[]; setDrafts: React.Dispatch<React.SetStateAction<Draft[]>>; goDir(): void;
   /** Archivos recibidos de la extensión, listos para procesar (el directorio ya está cargado) */
   incoming: File[]; onIncoming(): void;
+  /** Informes igrades (desempeño en el juego) pendientes */
+  games: GameJob[]; setGames: React.Dispatch<React.SetStateAction<GameJob[]>>;
 }) {
-  const { api, snap, toast, refresh } = useApp();
+  const { api, snap, toast, refresh, rowsByClase } = useApp();
   const go = useNavigate();
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -125,9 +130,14 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
     if (!arr.length) return;
     setBusy(`Leyendo ${plural(arr.length, "archivo", "archivos")}…`);
     const parsed: { file: File; rows: unknown[][] }[] = [];
+    const nuevosJuegos: GameJob[] = [];
     for (const file of arr) {
-      try { parsed.push({ file, rows: await readSheet(file) }); }
-      catch (e) { toast(`No pude leer "${file.name}": ${friendlyError(e)}`, "error"); }
+      try {
+        const book = await readBook(file);
+        const ig = parseIgrades(book);   // informe igrades: desempeño en el juego (tiempo, Scorecard, puntajes)
+        if (ig) nuevosJuegos.push({ key: file.name + Date.now(), fileName: file.name, data: ig, target: "" });
+        else parsed.push({ file, rows: Object.values(book)[0] ?? [] });
+      } catch (e) { toast(`No pude leer "${file.name}": ${friendlyError(e)}`, "error"); }
     }
     // primero los listados (se unen al directorio), después los informes (ya encuentran a cada persona)
     let list = roster;
@@ -164,7 +174,18 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
         raw: rep.students, links, decanos: [] });
     });
     setDrafts((ds) => [...ds, ...nd]);
+    if (nuevosJuegos.length) {
+      // se sugiere la clase con más equipos y estudiantes en común (también las nuevas de este lote)
+      const cls = snap.clases.map((c) => ({ id: c.id, rows: (rowsByClase.get(c.id) ?? []).map((r) => r.r) }));
+      const drs = [...drafts, ...nd].map((d) => ({ key: d.key, raw: d.raw }));
+      setGames((g) => [...g, ...nuevosJuegos.map((j) => ({ ...j, target: suggestTarget(j.data, cls, drs) }))]);
+      toast(`Desempeño del juego: ${plural(nuevosJuegos.reduce((a, j) => a + j.data.jugadores.length, 0), "jugador", "jugadores")}. Revisa a qué clase pertenece.`);
+    }
     setBusy(null);
+  };
+  const saveGame = async (g: GameJob, claseId: string) => {
+    await api.saveDesempeno(claseId, g.data.jugadores, g.data.equipos);
+    setGames((gs) => gs.map((x) => (x.key === g.key ? { ...x, saved: true, target: "clase:" + claseId } : x)));
   };
 
   useEffect(() => {
@@ -197,7 +218,9 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
       d.raw.forEach((s, i) => { if (d.links[i].choice === "nuevo") nuevos.push({ nombre: s.nombre, matricula: s.matricula, carrera: s.carrera, grupo: s.grupo || d.grupo, equipo: s.equipo || "" }); });
       try {
         if (d.replaceId) await api.replaceResultados(d.replaceId, { metrics: d.metrics, estudiantes, archivo: d.archivo });
-        else await api.importClase({ nombre: d.nombre.trim() || d.archivo, grupo: d.grupo, periodo: d.periodo, color: d.color, metrics: d.metrics, archivo: d.archivo, estudiantes, decanos: d.decanos });
+        const cid = d.replaceId || await api.importClase({ nombre: d.nombre.trim() || d.archivo, grupo: d.grupo, periodo: d.periodo, color: d.color, metrics: d.metrics, archivo: d.archivo, estudiantes, decanos: d.decanos });
+        // el desempeño del juego subido junto con este informe se guarda en la misma clase
+        for (const g of games.filter((x) => x.target === "draft:" + d.key && !x.saved)) await saveGame(g, cid);
         ok++;
         setDrafts((ds) => ds.filter((x) => x.key !== d.key));
       } catch (e) { toast(`${d.nombre}: ${friendlyError(e)}`, "error"); }
@@ -237,6 +260,11 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
           </div>
         </section>
       </div>
+
+      {games.map((g) => <GameCard key={g.key} job={g} drafts={drafts.map((d) => ({ key: d.key, nombre: d.nombre, raw: d.raw }))}
+        onTarget={(t) => setGames((gs) => gs.map((x) => (x.key === g.key ? { ...x, target: t } : x)))}
+        onSave={async () => { try { await saveGame(g, g.target.slice(6)); await refresh(); toast("Desempeño guardado"); } catch (e) { toast(friendlyError(e), "error"); } }}
+        onClose={() => setGames((gs) => gs.filter((x) => x.key !== g.key))} />)}
 
       {jobs.map((j, idx) => <ListCard key={j.key} job={j} last={idx === jobs.length - 1} onRedo={(p) => redo(j, p)} onUndo={() => undo(j)} onClose={() => setJobs((js) => js.filter((x) => x.key !== j.key))} />)}
 

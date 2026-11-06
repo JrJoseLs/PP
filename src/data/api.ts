@@ -1,4 +1,4 @@
-import type { Carrera, ClaseDraft, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 
 export interface Api {
   mode: "demo" | "cloud";
@@ -16,7 +16,10 @@ export interface Api {
 
   setClaseDecanos(claseId: string, ids: string[]): Promise<void>;
   setClaseMaestros(claseId: string, ids: string[]): Promise<void>;
-  importClase(d: ClaseDraft): Promise<void>;
+  /** Crea la clase con sus resultados y devuelve su id */
+  importClase(d: ClaseDraft): Promise<string>;
+  /** Sustituye el desempeño en el juego (informe igrades) de una clase */
+  saveDesempeno(claseId: string, jugadores: Omit<Desempeno, "id" | "clase_id">[], equipos: Omit<DesempenoEquipo, "clase_id">[]): Promise<void>;
   /** Sustituye los resultados de una clase existente; conserva nombre, color y accesos */
   replaceResultados(claseId: string, d: Pick<ClaseDraft, "metrics" | "estudiantes" | "archivo">): Promise<void>;
   updateClase(id: string, patch: { nombre?: string; grupo?: string; periodo?: string; color?: string }): Promise<void>;

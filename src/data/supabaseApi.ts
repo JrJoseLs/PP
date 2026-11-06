@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Api } from "./api";
-import type { Ajustes, Carrera, Clase, ClaseDraft, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Ajustes, Carrera, Clase, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 
 // Nombre de la Edge Function de cuentas en Supabase (ver supabase/functions/manage-users)
 const USERS_FN = "clever-action";
@@ -51,12 +51,13 @@ export class SupabaseApi implements Api {
       this.all<{ clase_id: string; decano_id: string }>("clase_decanos", "clase_id,decano_id"),
       this.all<{ clase_id: string; maestro_id: string }>("clase_maestros", "clase_id,maestro_id"),
     ]);
+    const [desempeno, desempenoEquipos] = await Promise.all([this.optional<Desempeno>("desempeno"), this.optional<DesempenoEquipo>("desempeno_equipos")]);
     const clases: Clase[] = clasesRaw.map((c) => ({
       ...c,
       decanos: cd.filter((x) => x.clase_id === c.id).map((x) => x.decano_id),
       maestros: cm.filter((x) => x.clase_id === c.id).map((x) => x.maestro_id),
     })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
-    return { profiles, clases, resultados, carreras, ajustes: await this.loadAjustes() };
+    return { profiles, clases, resultados, carreras, ajustes: await this.loadAjustes(), desempeno, desempenoEquipos };
   }
 
   private async fn(body: Record<string, unknown>) {
@@ -90,9 +91,17 @@ export class SupabaseApi implements Api {
     if (error) throw error;
   }
   async importClase(d: ClaseDraft) {
-    const { error } = await this.sb.rpc("import_clase", { p: d });
+    const { data, error } = await this.sb.rpc("import_clase", { p: d });
     if (error) throw error;
+    return data as string;
   }
+  async saveDesempeno(claseId: string, jugadores: Omit<Desempeno, "id" | "clase_id">[], equipos: Omit<DesempenoEquipo, "clase_id">[]) {
+    const { error } = await this.sb.rpc("replace_desempeno", { p_clase: claseId, p: { jugadores, equipos } });
+    if (error) throw new Error(/replace_desempeno|function|desempeno/i.test(error.message)
+      ? "Falta actualizar la base de datos: ejecuta supabase/migrations/004_desempeno.sql en el SQL Editor de Supabase." : error.message);
+  }
+  /** Si aún no existe la tabla (falta 004), simplemente no hay desempeño */
+  private async optional<T>(table: string): Promise<T[]> { try { return await this.all<T>(table); } catch { return []; } }
   async replaceResultados(claseId: string, d: Pick<ClaseDraft, "metrics" | "estudiantes" | "archivo">) {
     const { error } = await this.sb.rpc("replace_resultados", { p_clase: claseId, p: d });
     if (error) throw error;

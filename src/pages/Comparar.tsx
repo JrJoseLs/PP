@@ -13,6 +13,7 @@ import { SIN_CARRERA, SIN_GRUPO, avgIndex, avgVector, displayName, fmt, isRisk, 
 import { SERIES_COLORS, byClase, byDecano, byField, byMaestro, type Group } from "../lib/groups";
 import { PageHead } from "./Dashboard";
 import FilterBar from "../components/FilterBar";
+import { GameBars } from "../components/GameCharts";
 import { useScoped } from "../lib/scope";
 import { D, M, metricDesc, metricName } from "../lib/labels";
 
@@ -27,7 +28,7 @@ export default function Comparar() {
   const snap = useMemo(() => ({ ...snapAll, clases }), [snapAll, clases]);
   const [params, setParams] = useSearchParams();
   const [saved, setSaved] = usePref<string[]>("cmpSel_" + user!.id, []);
-  const [view, setView] = usePref<"radar" | "barras" | "tabla">("cmpView", "radar");
+  const [view, setView] = usePref<"radar" | "barras" | "tabla" | "juego">("cmpView", "radar");
   const [invert, setInvert] = usePref("radarInvert", true);
   const [tipo, setTipo] = usePref<Tipo>("cmpTipo_" + user!.id, user!.rol === "maestro" ? "clase" : "maestro");
   const [orden, setOrden] = usePref<"indice" | "nombre">("cmpOrden", "indice");
@@ -178,11 +179,13 @@ export default function Comparar() {
             </div>
             <div className="card pad">
               <div className="card-h">
-                <Segmented value={view} onChange={setView} options={[{ value: "radar", label: "Araña" }, { value: "barras", label: "Barras" }, { value: "tabla", label: "Tabla" }]} />
+                <Segmented value={view} onChange={setView} options={[{ value: "radar", label: "Araña" }, { value: "barras", label: "Barras" }, { value: "tabla", label: "Tabla" },
+                  ...(allRows.some((r) => r.juego) ? [{ value: "juego" as const, label: "Juego" }] : [])]} />
                 <label className="switch-label"><input type="checkbox" className="switch" checked={hideSparse} onChange={(e) => setHideSparse(e.target.checked)} /> Ocultar competencias casi vacías</label>
               </div>
               {view === "radar" && <Radar labels={labels} series={series} invert={invert} onInvert={setInvert} size={600} title="comparacion" />}
               {view === "barras" && <MetricBars labels={labels} series={series} />}
+              {view === "juego" && <GameBars series={chosen.map((g) => ({ name: g.label, color: g.color, rows: g.rows as Row[] }))} />}
               {view === "tabla" && <DiffTable labels={labels} chosen={chosen.map((g) => ({ label: g.label, color: g.color, values: vecFor(g.vector) }))} />}
             </div>
           </>}

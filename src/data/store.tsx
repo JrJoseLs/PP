@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Api } from "./api";
 import { createApi, friendlyError } from "./api";
-import type { Clase, Profile, Snapshot } from "../lib/types";
+import type { Clase, Desempeno, DesempenoEquipo, Profile, Snapshot } from "../lib/types";
+import { linkJugadores } from "../lib/game";
 import { SIN_CARRERA, SIN_GRUPO, generalIndex, normText, unionMetrics, type Row } from "../lib/metrics";
 import { setMetricNames, setRoleNames, type RoleNames } from "../lib/labels";
 
@@ -13,6 +14,8 @@ interface Ctx {
   loading: boolean;
   rows: Row[];
   rowsByClase: Map<string, Row[]>;
+  /** Desempeño en el juego por clase: jugadores (enlazados o no) y equipos */
+  juegoByClase: Map<string, { jugadores: Desempeno[]; equipos: DesempenoEquipo[]; sinEnlace: Desempeno[] }>;
   metrics: string[];
   setUser(u: Profile | null): void;
   refresh(): Promise<void>;
@@ -26,7 +29,7 @@ interface Ctx {
 const AppCtx = createContext<Ctx | null>(null);
 export const useApp = () => { const c = useContext(AppCtx); if (!c) throw new Error("sin AppProvider"); return c; };
 
-const EMPTY: Snapshot = { profiles: [], clases: [], resultados: [], carreras: [], ajustes: {} };
+const EMPTY: Snapshot = { profiles: [], clases: [], resultados: [], carreras: [], ajustes: {}, desempeno: [], desempenoEquipos: [] };
 export interface ToastItem { id: number; msg: string; kind: "ok" | "error"; }
 
 export function AppProvider({ children, onToasts }: { children: ReactNode; onToasts: (t: ToastItem[]) => void }) {
@@ -95,9 +98,21 @@ export function AppProvider({ children, onToasts }: { children: ReactNode; onToa
       if (!rowsByClase.has(cls.id)) rowsByClase.set(cls.id, []);
       rowsByClase.get(cls.id)!.push(row);
     }
+    // cada jugador del informe igrades se enlaza con su estudiante (nombre + equipo)
+    const juegoByClase: Ctx["juegoByClase"] = new Map();
+    snap.desempenoEquipos.forEach((e) => { if (!juegoByClase.has(e.clase_id)) juegoByClase.set(e.clase_id, { jugadores: [], equipos: [], sinEnlace: [] }); juegoByClase.get(e.clase_id)!.equipos.push(e); });
+    const porClase = new Map<string, Desempeno[]>();
+    snap.desempeno.forEach((d) => { if (!porClase.has(d.clase_id)) porClase.set(d.clase_id, []); porClase.get(d.clase_id)!.push(d); });
+    porClase.forEach((js, cid) => {
+      if (!juegoByClase.has(cid)) juegoByClase.set(cid, { jugadores: [], equipos: [], sinEnlace: [] });
+      const g = juegoByClase.get(cid)!;
+      g.jugadores = js;
+      const rr = rowsByClase.get(cid) ?? [];
+      linkJugadores(js, rr.map((x) => x.r)).forEach((k, i) => { if (k >= 0) rr[k].juego = js[i]; else g.sinEnlace.push(js[i]); });
+    });
     const people = new Map(snap.profiles.map((p) => [p.id, p]));
     return {
-      rows, rowsByClase, carreraName, metrics: unionMetrics(snap.clases),
+      rows, rowsByClase, juegoByClase, carreraName, metrics: unionMetrics(snap.clases),
       person: (id: string | null | undefined) => (id ? people.get(id) : undefined),
       maestrosOf: (c: Clase) => c.maestros.map((m) => people.get(m)).filter((p): p is Profile => !!p),
     };

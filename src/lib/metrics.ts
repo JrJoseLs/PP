@@ -1,4 +1,4 @@
-import type { Clase, Resultado } from "./types";
+import type { Clase, Desempeno, Resultado } from "./types";
 
 /* Competencias "de riesgo": un valor ALTO es MALO. No entran en el índice general. */
 const RISK = new Set(["MARGEN DE MEJORA", "OPORTUNIDAD PERDIDA", "FALTA DE PREVISION", "LUCHADO", "INSUFICIENTE", "RETRASAR"]);
@@ -59,6 +59,7 @@ export interface Row {
   carrera: string;     // etiqueta visible
   grupo: string;
   equipo: string;     // equipo dentro del juego ("" si no se sabe)
+  juego?: Desempeno;  // tiempo y puntajes del informe igrades, si se importó y se enlazó
   q: string;           // texto de búsqueda
 }
 export const SIN_CARRERA = "Sin carrera";
