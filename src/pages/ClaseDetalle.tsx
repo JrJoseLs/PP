@@ -11,7 +11,7 @@ import { PageHead } from "./Dashboard";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
 import { GridEditor, ReuploadButton } from "../components/ClassEditor";
-import { TeamBoard, TimeScatter } from "../components/GameCharts";
+import { GamePanel } from "../components/GameCharts";
 import { fmtMin } from "../lib/game";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
@@ -115,7 +115,7 @@ export default function ClaseDetalle() {
       ))}
 
       {juego && (juego.jugadores.length > 0 || juego.equipos.length > 0) && (() => {
-        const conT = d.rr.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined);
+        const conJ = d.rr.filter((r) => r.juego);
         const total = juego.jugadores.reduce((a, j) => a + (j.minutos ?? 0), 0);
         const prom = juego.jugadores.length ? total / juego.jugadores.length : null;
         const bscs = juego.equipos.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
@@ -129,8 +129,7 @@ export default function ClaseDetalle() {
               <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={`promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
               <Stat label="Puntaje del juego" value={fmt(pun.length ? pun.reduce((a, b) => a + b, 0) / pun.length : null)} sub="promedio de la clase" />
             </div>
-            {conT.length > 0 && <><h4 className="sub-h">Tiempo invertido vs. resultado</h4><TimeScatter rows={conT} onPick={(r) => openStudent(r.r.id, conT.map((x) => x.r.id))} /></>}
-            {juego.equipos.length > 0 && <><h4 className="sub-h">Equipos</h4><TeamBoard equipos={juego.equipos} /></>}
+            <GamePanel rows={conJ} equipos={juego.equipos} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />
             {juego.sinEnlace.length > 0 && <p className="muted tiny">{plural(juego.sinEnlace.length, "jugador del informe no se enlazó", "jugadores del informe no se enlazaron")} con un estudiante de esta clase: {juego.sinEnlace.slice(0, 5).map((j) => displayName(j.nombre)).join(", ")}{juego.sinEnlace.length > 5 ? "…" : ""}.</p>}
           </section>
         );

@@ -983,6 +983,52 @@ button.ms { cursor: pointer; }
 .tb-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); border-radius: 1px; }
 .tb-bar small { position: absolute; right: 6px; top: 0; line-height: 16px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tboard .num { text-align: right; }
+.tscatter .dot-pt.dim { opacity: .12; }
+.team-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+.tchip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 9px; border-radius: 980px; border: 1px solid var(--sep); background: var(--fill-1); color: var(--text); font: 500 12.5px var(--font); cursor: pointer; transition: background .12s, opacity .12s, border-color .12s; }
+.tchip .dot { background: var(--c); }
+.tchip small { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.tchip:hover:not(:disabled) { background: var(--fill-2); }
+.tchip.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); font-weight: 600; }
+.tchip.off { opacity: .5; }
+.tchip:disabled { cursor: default; }
+.game-tabs { margin-top: 22px; margin-bottom: 4px; }
+.tb-item { border-bottom: 1px solid var(--sep); transition: opacity .15s; }
+.tb-item .tb-row { border-bottom: 0; }
+.tb-item.faded { opacity: .45; }
+.tb-item.open { background: var(--fill-1); border-radius: 12px; border-bottom-color: transparent; margin: 4px 0; }
+.tb-btn { width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 9px 8px; border-radius: 10px; }
+.tb-btn:hover:not(:disabled) { background: var(--fill-1); }
+.tb-btn:disabled { cursor: default; }
+.tb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-n small { margin-left: auto; font-size: 11px; }
+.tb-bar .tend { margin-left: 4px; font-size: 9px; }
+.tb-bar .tend.up { color: var(--good-ink); } .tb-bar .tend.down { color: var(--bad-ink); }
+.tb-members { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 10px 34px; }
+.tbm { display: grid; grid-template-columns: minmax(140px, 1.3fr) 2fr 100px 90px; gap: 12px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 0; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.tbm:hover { background: var(--fill-2); }
+.tbm .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbm-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sgt-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0 10px; }
+.sgt-search { flex: 0 1 280px; height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--sep); background: var(--fill-1); color: var(--text); font: 14px var(--font); outline: none; }
+.sgt-search:focus { border-color: var(--accent); }
+.sgt-scroll { max-height: 520px; border: 1px solid var(--sep); border-radius: 12px; }
+.sgt th, .sgt td { padding-left: 10px; padding-right: 10px; }
+.sgt .tb-bar.slim { height: 8px; min-width: 70px; }
+.sgt .tval { width: 74px; text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.sgt .t-cell { min-width: 196px; display: flex; align-items: center; gap: 8px; }
+.sgt .t-cell .tb-bar { flex: 1; }
+.tb-bar em.avg { background: var(--text-2); opacity: .7; }
+.sgt .dif { font-size: 11.5px; font-weight: 600; width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.sgt .dif.pos { color: var(--good-ink); } .sgt .dif.neg { color: var(--text-3); }
+.eq-cell { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); margin-top: 1px; }
+.th-sort { background: none; border: 0; padding: 0; color: var(--text-3); font: inherit; font-weight: 600; cursor: pointer; }
+.th-sort.on, .th-sort:hover { color: var(--text); }
+.pf { display: inline-flex; height: 22px; align-items: center; padding: 0 9px; border-radius: 980px; font-size: 11.5px; font-weight: 600; }
+.pf.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good-ink); }
+.pf.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn-ink); }
+.pf.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad-ink); }
+@media (max-width: 700px) { .tbm { grid-template-columns: 1fr 1fr; } .tbm > :nth-child(4) { display: none; } .tb-members { padding-left: 8px; } }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
