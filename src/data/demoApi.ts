@@ -20,7 +20,7 @@ export class DemoApi implements Api {
   constructor() {
     let db: DemoDb | null = null;
     try { db = JSON.parse(localStorage.getItem(DB_KEY) || "null"); } catch { /* */ }
-    this.db = db && db.version === 4 ? db : buildDemo();
+    this.db = db && db.version === 5 ? db : buildDemo();
   }
   private save() { try { localStorage.setItem(DB_KEY, JSON.stringify(this.db)); } catch { /* lleno o bloqueado */ } }
   static reset() { try { localStorage.removeItem(DB_KEY); } catch { /* */ } }

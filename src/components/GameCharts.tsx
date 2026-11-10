@@ -1,10 +1,11 @@
 /* Gráficos del desempeño en el juego (informe igrades): tiempo invertido, Scorecard y puntajes. */
 import { useMemo, useState, type CSSProperties } from "react";
-import { fmt, displayName, type Row } from "../lib/metrics";
-import { fmtMin, median, nTrim, pearson, promedioQ, valoresQ, type SerieQ } from "../lib/game";
+import { fmt, displayName, plural, type Row } from "../lib/metrics";
+import { fmtMin, median, nTrim, pearson, promedioQ, ultimoT, valoresQ, type SerieQ } from "../lib/game";
 import { SERIES_COLORS } from "../lib/groups";
-import type { DesempenoEquipo } from "../lib/types";
-import { Segmented } from "./ui";
+import type { Desempeno, DesempenoEquipo } from "../lib/types";
+import type { Incompleto } from "../data/store";
+import { Icon, Segmented } from "./ui";
 
 export type EjeY = "indice" | "puntaje" | "bsc_acum";
 const EJE: Record<EjeY, { label: string; corto: string; get(r: Row): number | null }> = {
@@ -13,6 +14,8 @@ const EJE: Record<EjeY, { label: string; corto: string; get(r: Row): number | nu
   bsc_acum: { label: "Scorecard acumulado del equipo", corto: "Scorecard", get: (r) => r.juego?.bsc_acum ?? null },
 };
 /* Un color distinto por equipo: la paleta de la app y, si hay más equipos que colores, tonos repartidos por ángulo áureo. */
+/** El puntaje del juego solo viene en algunos informes: si nadie lo tiene, no se muestra en ningún lado */
+export const hayPuntaje = (xs: ({ puntaje?: number | null; puntaje_ajustado?: number | null } | undefined)[]) => xs.some((x) => x && (x.puntaje != null || x.puntaje_ajustado != null));
 export const teamColors = (equipos: string[]) => new Map([...new Set(equipos)].sort((a, b) => a.localeCompare(b, "es")).map((e, i) =>
   [e, i < SERIES_COLORS.length ? SERIES_COLORS[i] : `hsl(${Math.round((i * 137.508 + 20) % 360)} 70% 58%)`]));
 const eqDe = (r: Row) => r.juego?.equipo || r.equipo || "—";
@@ -33,6 +36,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
   rows: Row[]; onPick(r: Row): void; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void;
 }) {
   // sin informe de competencias todavía, se empieza por lo que sí hay
+  const conPun = hayPuntaje(rows.map((r) => r.juego));
   const [eje, setEje] = useState<EjeY>(() => rows.some((r) => r.indice !== null) ? "indice" : rows.some((r) => r.juego?.bsc_acum != null) ? "bsc_acum" : "puntaje");
   const [hover, setHover] = useState<Row | null>(null);
   const pts = rows.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined && EJE[eje].get(r) !== null);
@@ -61,7 +65,10 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
   return (
     <div className="tscatter">
       <div className="card-h">
-        <Segmented size="sm" value={eje} onChange={setEje} options={[{ value: "indice", label: "Competencias" }, { value: "puntaje", label: "Puntaje" }, { value: "bsc_acum", label: "Scorecard" }]} />
+        <Segmented size="sm" value={eje} onChange={setEje} options={[
+          ...(rows.some((r) => r.indice !== null) ? [{ value: "indice" as const, label: "Competencias" }] : []),
+          { value: "bsc_acum" as const, label: "Scorecard" },
+          ...(conPun ? [{ value: "puntaje" as const, label: "Puntaje" }] : [])]} />
         {relacion && <span className="muted small">Relación tiempo–{EJE[eje].corto}: <b>{relacion}</b> (r = {r!.toFixed(2)})</span>}
       </div>
       <div className="tscatter-plot">
@@ -121,12 +128,13 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
   const maxM = Math.max(1, ...lista.map((e) => porPersona(e) ?? e.minutos ?? 0));
   const maxMin = Math.max(1, ...rows.map((r) => r.juego?.minutos ?? 0));
   const colors = colorsIn ?? teamColors(equipos.map((e) => e.equipo));
+  const conPun = hayPuntaje(equipos) || hayPuntaje(rows.map((r) => r.juego));
   const conPersonas = rows.length > 0;
   return (
     <div className="tboard">
       <div className="tb-row tb-h">
         <span>Equipo</span><span>Scorecard acumulado <i className="mk" /> último trimestre</span>
-        <span>{conPersonas ? "Tiempo por integrante" : "Tiempo total"}</span><span className="num">Percentil</span><span className="num">Puntaje</span>
+        <span>{conPersonas ? "Tiempo por integrante" : "Tiempo total"}</span><span className="num">Percentil</span><span className="num">{conPun ? "Puntaje" : "Llegó a"}</span>
       </div>
       {lista.map((e, i) => {
         const open = !!focus && sameEq(focus, e.equipo);
@@ -145,7 +153,7 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
               </span>
               <span className="tb-bar time" title={`Total del equipo ${fmtMin(e.minutos)}`}><i style={{ width: ((tpp ?? 0) / maxM) * 100 + "%" }} /><small>{fmtMin(tpp)}</small></span>
               <span className="num">{e.percentil !== null ? <span className={"chip" + ((e.percentil ?? 0) >= 66 ? " alto" : (e.percentil ?? 0) < 34 ? " bajo" : "")}>{Math.round(e.percentil!)}</span> : <span className="muted">n/A</span>}</span>
-              <span className="num"><b>{e.puntaje !== null ? fmt(e.puntaje) : "—"}</b></span>
+              <span className="num">{conPun ? <b>{e.puntaje !== null ? fmt(e.puntaje) : "—"}</b> : <b>{ultimoT(e) ? "T" + ultimoT(e) : "—"}</b>}</span>
             </button>
             {open && (
               <div className="tb-members">
@@ -154,7 +162,7 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
                   <button type="button" key={r.r.id} className="tbm" onClick={() => onPick?.(r)}>
                     <span className="tbm-n">{displayName(r.r.nombre)}</span>
                     <span className="tb-bar time"><i style={{ width: ((r.juego?.minutos ?? 0) / maxMin) * 100 + "%", background: colors.get(e.equipo), opacity: .7 }} /><small>{fmtMin(r.juego?.minutos ?? null)}</small></span>
-                    <span className="num"><small className="muted">puntaje</small> <b>{fmt(r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null)}</b></span>
+                    {conPun ? <span className="num"><small className="muted">puntaje</small> <b>{fmt(r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null)}</b></span> : <span />}
                     <span className="num"><small className="muted">índice</small> <b>{fmt(r.indice)}</b></span>
                   </button>
                 ))}
@@ -175,6 +183,8 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
   const [sort, setSort] = useState<{ k: ColJ; asc: boolean }>({ k: "minutos", asc: false });
   const [q, setQ] = useState("");
   const perfil = useMemo(() => perfiles(rows), [rows]);
+  const conPun = hayPuntaje(rows.map((r) => r.juego));
+  const conComp = rows.some((r) => r.indice !== null);
   const val = (r: Row, k: ColJ): number | string | null => k === "nombre" ? displayName(r.r.nombre) : k === "equipo" ? eqDe(r)
     : k === "minutos" ? r.juego?.minutos ?? null : k === "puntaje" ? r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null
     : k === "bsc" ? r.juego?.bsc_acum ?? null : r.indice;
@@ -199,7 +209,7 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
       </div>
       <div className="table-scroll sgt-scroll">
         <table className="etable sgt">
-          <thead><tr>{th("nombre", "Estudiante")}{th("minutos", "Tiempo en el juego")}{th("puntaje", "Puntaje", "num")}{th("bsc", "Scorecard eq.", "num")}{th("indice", "Competencias", "num")}<th>Perfil</th></tr></thead>
+          <thead><tr>{th("nombre", "Estudiante")}{th("minutos", "Tiempo en el juego")}{conPun && th("puntaje", "Puntaje", "num")}{th("bsc", "Scorecard eq.", "num")}{conComp && <>{th("indice", "Competencias", "num")}<th>Perfil</th></>}</tr></thead>
           <tbody>
             {lista.map((r) => {
               const m = r.juego?.minutos ?? null, p = perfil(r);
@@ -211,10 +221,10 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
                     <span className="tb-bar time slim"><i style={{ width: ((m ?? 0) / maxMin) * 100 + "%" }} />{pm && <em className="avg" style={{ left: (pm / maxMin) * 100 + "%" }} />}</span><b className="tval">{fmtMin(m)}</b>
                     {dif !== null && <span className={"dif " + (dif >= 0 ? "pos" : "neg")}>{dif >= 0 ? "+" : ""}{dif}%</span>}</div>
                   </td>
-                  <td className="num">{fmt(val(r, "puntaje") as number | null)}</td>
+                  {conPun && <td className="num">{fmt(val(r, "puntaje") as number | null)}</td>}
                   <td className="num">{fmt(val(r, "bsc") as number | null)}</td>
-                  <td className="num"><b>{fmt(r.indice)}</b></td>
-                  <td>{p >= 0 ? <span className={"pf " + PERFIL_CLS[p]}>{PERFILES[p as 0 | 1 | 2 | 3]}</span> : <span className="muted">—</span>}</td>
+                  {conComp && <><td className="num"><b>{fmt(r.indice)}</b></td>
+                  <td>{p >= 0 ? <span className={"pf " + PERFIL_CLS[p]}>{PERFILES[p as 0 | 1 | 2 | 3]}</span> : <span className="muted">—</span>}</td></>}
                 </tr>
               );
             })}
@@ -279,7 +289,7 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
       {j.tiempos && j.tiempos.length > 0 && <TrimestreBars mine={j.tiempos} classRows={classRows} />}
       <TeamEvolution row={row} classRows={classRows} />
       <div className="sg-kpis">
-        <div><small>Puntaje del juego</small><b>{fmt(j.puntaje_ajustado ?? j.puntaje)}</b>{j.puntaje_ajustado !== null && j.puntaje !== null && j.puntaje_ajustado !== j.puntaje && <em>automático {fmt(j.puntaje)}</em>}</div>
+        {j.puntaje == null && j.puntaje_ajustado == null ? <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div> : <div><small>Puntaje del juego</small><b>{fmt(j.puntaje_ajustado ?? j.puntaje)}</b>{j.puntaje_ajustado !== null && j.puntaje !== null && j.puntaje_ajustado !== j.puntaje && <em>automático {fmt(j.puntaje)}</em>}</div>}
         <div><small>Scorecard acumulado del equipo</small><b>{fmt(j.bsc_acum)}</b></div>
         <div><small>Scorecard del último trimestre</small><b>{fmt(j.bsc)}</b>{j.bsc_acum !== null && j.bsc !== null && <em className={j.bsc >= j.bsc_acum ? "pos" : "neg"}>{j.bsc >= j.bsc_acum ? "▲ mejorando" : "▼ por debajo del acumulado"}</em>}</div>
         <div><small>Trimestres jugados</small><b>{j.trimestres ?? "—"}</b></div>
@@ -339,7 +349,7 @@ export function GameBars({ series }: { series: { name: string; color: string; ro
   return (
     <div className="gbars">
       {bloque("Tiempo promedio por estudiante", "min", fmtMin)}
-      {bloque("Puntaje promedio del juego", "pun", (v) => fmt(v))}
+      {datos.some((d) => d.pun !== null) && bloque("Puntaje promedio del juego", "pun", (v) => fmt(v))}
       {bloque("Scorecard acumulado promedio", "bsc", (v) => fmt(v))}
       <CompareQuarters series={series} />
       <p className="muted tiny">Solo cuentan los estudiantes con desempeño importado: {datos.map((d) => `${d.name} ${d.n}`).join(" · ")}.</p>
@@ -487,6 +497,70 @@ function CompareQuarters({ series }: { series: { name: string; color: string; ro
       <div className="card-h"><h4 className="sub-h">Por trimestre</h4>
         <Segmented size="sm" value={k} onChange={setK} options={[{ value: "bsc", label: "Scorecard" }, { value: "bsc_acum", label: "Acumulado" }, { value: "tiempo", label: "Tiempo" }]} /></div>
       <QuarterLines n={n} k={k} height={230} series={qs} />
+    </div>
+  );
+}
+
+/* ---------- Fuera de los gráficos: quien no completó la simulación o no está en el informe ---------- */
+export function IncompleteList({ items, equipos, meta, sinJuego, onPick }: {
+  items: Incompleto[]; equipos: DesempenoEquipo[]; meta: number; sinJuego: number; onPick(r: Row): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const eqSolos = equipos.filter((e) => !items.some((i) => i.d.equipo.trim().toUpperCase() === e.equipo.trim().toUpperCase()));
+  const nT = items.filter((i) => i.motivo === "trimestres").length, nS = items.length - nT;
+  if (!items.length && !eqSolos.length && !sinJuego) return null;
+  const barra = (h: number) => <span className="inc-prog" title={`Llegó al trimestre ${h} de ${meta}`}>{Array.from({ length: meta }, (_, k) => <i key={k} className={k < h ? "on" : ""} />)}</span>;
+  return (
+    <div className="inc-box">
+      <button type="button" className="inc-h" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="inc-ico"><Icon name="alert" size={15} /></span>
+        <span className="rank-txt"><b>Fuera de los gráficos · {items.length + eqSolos.length}</b>
+          <small>{[nT && plural(nT, `no llegó al trimestre ${meta}`, `no llegaron al trimestre ${meta}`), nS && plural(nS, "no está en el Informe de Preparación Profesional", "no están en el Informe de Preparación Profesional"), eqSolos.length && plural(eqSolos.length, "equipo sin integrantes válidos", "equipos sin integrantes válidos")].filter(Boolean).join(" · ") || "—"}</small></span>
+        <Icon name="chevron" size={14} />
+      </button>
+      {open && <>
+        <p className="muted small">Se registra hasta dónde llegaron, pero <b>no cuentan en gráficos, promedios ni comparaciones</b>: sus datos están incompletos. La meta es el trimestre más alto que alcanzó la clase{meta ? ` (T${meta})` : ""}.</p>
+        {items.length > 0 && (
+          <div className="table-scroll sgt-scroll">
+            <table className="etable inc-table">
+              <thead><tr><th>Jugador</th><th>Llegó hasta</th><th className="num">Tiempo</th><th className="num">Scorecard acum.</th><th>Motivo</th></tr></thead>
+              <tbody>
+                {items.map((i) => (
+                  <tr key={i.d.id} onClick={() => i.row && onPick(i.row)} className={i.row ? "" : "nolink"}>
+                    <td><b>{displayName(i.d.nombre)}</b><span className="eq-cell">{i.d.equipo || "—"}</span></td>
+                    <td><span className="inc-hasta">{meta ? barra(i.hasta) : null}<small>{i.hasta ? `T${i.hasta}` : "sin trimestres"}{meta ? ` de ${meta}` : ""}</small></span></td>
+                    <td className="num">{fmtMin(i.d.minutos)}</td>
+                    <td className="num">{fmt(i.d.bsc_acum)}</td>
+                    <td>{i.motivo === "trimestres" ? <span className="pf warn">No completó</span>
+                      : <span className="pf bad" title="Puede que no terminara la simulación o que su nombre no coincida con el del informe: si es así, corrígelo en «Editar» de la clase.">{i.hasta >= meta ? "Sin informe de competencias" : "No completó · sin informe"}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {eqSolos.length > 0 && <p className="muted small">Equipos sin integrantes válidos: {eqSolos.map((e) => `${e.equipo} (T${ultimoT(e) || "—"})`).join(", ")}.</p>}
+        {sinJuego > 0 && <p className="muted small">{plural(sinJuego, "estudiante del informe de competencias no aparece", "estudiantes del informe de competencias no aparecen")} en el desempeño del juego: sus competencias sí cuentan; sus tiempos no se conocen.</p>}
+        {nS > 0 && <p className="muted tiny">«Sin informe de competencias»: si en realidad sí está en la clase con otro nombre, corrígelo en <b>Editar</b> y se enlazará solo.</p>}
+      </>}
+    </div>
+  );
+}
+
+/** Ficha de quien no completó: se muestra hasta dónde llegó, sin compararlo con la clase */
+export function StudentGamePartial({ d, meta }: { d: Desempeno; meta: number }) {
+  const h = ultimoT(d);
+  return (
+    <div className="card pad sgame partial">
+      <h3>Desempeño en el juego</h3>
+      <p className="sg-frase">No completó la simulación: llegó {h ? `hasta el trimestre ${h}` : "sin trimestres registrados"}{meta ? ` de ${meta}` : ""}.</p>
+      <div className="sg-kpis">
+        <div><small>Último trimestre</small><b>{h ? "T" + h : "—"}</b></div>
+        <div><small>Tiempo registrado</small><b>{fmtMin(d.minutos)}</b></div>
+        <div><small>Scorecard acumulado del equipo</small><b>{fmt(d.bsc_acum)}</b></div>
+        <div><small>Equipo</small><b className="sm">{d.equipo || "—"}</b></div>
+      </div>
+      <p className="muted tiny">Estos datos son incompletos: no se usan en gráficos, promedios ni comparaciones de la clase.</p>
     </div>
   );
 }

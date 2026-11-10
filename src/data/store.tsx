@@ -2,9 +2,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Api } from "./api";
 import { createApi, friendlyError } from "./api";
 import type { Clase, Desempeno, DesempenoEquipo, Profile, Snapshot } from "../lib/types";
-import { linkJugadores } from "../lib/game";
+import { linkJugadores, ultimoT } from "../lib/game";
 import { SIN_CARRERA, SIN_GRUPO, generalIndex, normText, unionMetrics, type Row } from "../lib/metrics";
 import { setMetricNames, setRoleNames, type RoleNames } from "../lib/labels";
+
+/** Jugador que queda fuera de los gráficos: no completó la simulación o no está en el informe de competencias */
+export interface Incompleto { d: Desempeno; motivo: "trimestres" | "sin_informe"; hasta: number; row?: Row; }
+export interface JuegoClase {
+  jugadores: Desempeno[]; equipos: DesempenoEquipo[];
+  /** Trimestre que hay que alcanzar: el más alto al que llegó alguien de la clase (6 al terminar el juego) */
+  meta: number;
+  completos: Desempeno[]; equiposOk: DesempenoEquipo[];
+  incompletos: Incompleto[]; equiposFuera: DesempenoEquipo[];
+}
 
 interface Ctx {
   api: Api;
@@ -14,8 +24,8 @@ interface Ctx {
   loading: boolean;
   rows: Row[];
   rowsByClase: Map<string, Row[]>;
-  /** Desempeño en el juego por clase: jugadores (enlazados o no) y equipos */
-  juegoByClase: Map<string, { jugadores: Desempeno[]; equipos: DesempenoEquipo[]; sinEnlace: Desempeno[] }>;
+  /** Desempeño en el juego por clase. Solo «completos» y «equiposOk» entran en gráficos y promedios. */
+  juegoByClase: Map<string, JuegoClase>;
   metrics: string[];
   setUser(u: Profile | null): void;
   refresh(): Promise<void>;
@@ -100,15 +110,23 @@ export function AppProvider({ children, onToasts }: { children: ReactNode; onToa
     }
     // cada jugador del informe igrades se enlaza con su estudiante (nombre + equipo)
     const juegoByClase: Ctx["juegoByClase"] = new Map();
-    snap.desempenoEquipos.forEach((e) => { if (!juegoByClase.has(e.clase_id)) juegoByClase.set(e.clase_id, { jugadores: [], equipos: [], sinEnlace: [] }); juegoByClase.get(e.clase_id)!.equipos.push(e); });
-    const porClase = new Map<string, Desempeno[]>();
-    snap.desempeno.forEach((d) => { if (!porClase.has(d.clase_id)) porClase.set(d.clase_id, []); porClase.get(d.clase_id)!.push(d); });
-    porClase.forEach((js, cid) => {
-      if (!juegoByClase.has(cid)) juegoByClase.set(cid, { jugadores: [], equipos: [], sinEnlace: [] });
-      const g = juegoByClase.get(cid)!;
-      g.jugadores = js;
+    const nuevo = (): JuegoClase => ({ jugadores: [], equipos: [], meta: 0, completos: [], equiposOk: [], incompletos: [], equiposFuera: [] });
+    snap.desempenoEquipos.forEach((e) => { if (!juegoByClase.has(e.clase_id)) juegoByClase.set(e.clase_id, nuevo()); juegoByClase.get(e.clase_id)!.equipos.push(e); });
+    snap.desempeno.forEach((d) => { if (!juegoByClase.has(d.clase_id)) juegoByClase.set(d.clase_id, nuevo()); juegoByClase.get(d.clase_id)!.jugadores.push(d); });
+    juegoByClase.forEach((g, cid) => {
       const rr = rowsByClase.get(cid) ?? [];
-      linkJugadores(js, rr.map((x) => x.r)).forEach((k, i) => { if (k >= 0) rr[k].juego = js[i]; else g.sinEnlace.push(js[i]); });
+      g.meta = Math.max(0, ...g.jugadores.map(ultimoT), ...g.equipos.map(ultimoT));
+      const llego = (x: Desempeno | DesempenoEquipo) => !g.meta || ultimoT(x) >= g.meta;
+      linkJugadores(g.jugadores, rr.map((x) => x.r)).forEach((k, i) => {
+        const d = g.jugadores[i], row = k >= 0 ? rr[k] : undefined;
+        if (!row) g.incompletos.push({ d, motivo: "sin_informe", hasta: ultimoT(d) });
+        else if (!llego(d)) { row.juegoParcial = d; g.incompletos.push({ d, motivo: "trimestres", hasta: ultimoT(d), row }); }
+        else { row.juego = d; g.completos.push(d); }
+      });
+      // un equipo cuenta si llegó a la meta y (si hay hoja de jugadores) al menos uno de los suyos completó y está en el informe
+      const eqOk = new Set(g.completos.map((d) => normText(d.equipo)));
+      g.equipos.forEach((e) => (llego(e) && (!g.jugadores.length || eqOk.has(normText(e.equipo))) ? g.equiposOk : g.equiposFuera).push(e));
+      g.incompletos.sort((x, y) => x.hasta - y.hasta || x.d.nombre.localeCompare(y.d.nombre, "es"));
     });
     const people = new Map(snap.profiles.map((p) => [p.id, p]));
     return {

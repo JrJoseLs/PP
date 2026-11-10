@@ -128,7 +128,7 @@ export const claseNameFromGame = (fileName: string) => { const c = gameCode(file
 
 type ConHist = { trimestres: number | null; historial?: PuntoTrimestre[] | null; tiempos?: number[] | null };
 /** Último trimestre que refleja un registro */
-const ultimoT = (x: ConHist) => Math.max(x.trimestres ?? 0, ...(x.historial ?? []).map((p) => p.t));
+export const ultimoT = (x: ConHist) => Math.max(x.trimestres ?? 0, ...(x.historial ?? []).map((p) => p.t));
 /** Une historiales por trimestre; si un trimestre se repite, manda `b` */
 function unirHist(a?: PuntoTrimestre[] | null, b?: PuntoTrimestre[] | null) {
   const m = new Map<number, PuntoTrimestre>();

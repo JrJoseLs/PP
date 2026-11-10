@@ -11,7 +11,7 @@ import { PageHead } from "./Dashboard";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
 import { GridEditor, ReuploadButton } from "../components/ClassEditor";
-import { GamePanel } from "../components/GameCharts";
+import { GamePanel, IncompleteList } from "../components/GameCharts";
 import { fmtMin } from "../lib/game";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
@@ -116,21 +116,25 @@ export default function ClaseDetalle() {
 
       {juego && (juego.jugadores.length > 0 || juego.equipos.length > 0) && (() => {
         const conJ = d.rr.filter((r) => r.juego);
-        const total = juego.jugadores.reduce((a, j) => a + (j.minutos ?? 0), 0);
-        const prom = juego.jugadores.length ? total / juego.jugadores.length : null;
-        const bscs = juego.equipos.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
-        const pun = juego.jugadores.map((j) => j.puntaje_ajustado ?? j.puntaje).filter((x): x is number => x !== null);
+        // solo quienes completaron la simulación y están en el informe: los datos incompletos no entran en los promedios
+        const total = juego.completos.reduce((a, j) => a + (j.minutos ?? 0), 0);
+        const prom = juego.completos.length ? total / juego.completos.length : null;
+        const bscs = juego.equiposOk.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
+        const pun = juego.completos.map((j) => j.puntaje_ajustado ?? j.puntaje).filter((x): x is number => x !== null);
+        const sinJuego = d.rr.filter((r) => !r.juego && !r.juegoParcial).length;
         return (
           <section className="card pad game-sec">
-            <div className="card-h"><h3><Icon name="bolt" size={18} /> Desempeño en el juego</h3><span className="muted small">Informe igrades · tiempo, Scorecard y puntajes</span></div>
+            <div className="card-h"><h3><Icon name="bolt" size={18} /> Desempeño en el juego</h3><span className="muted small">{juego.meta ? `Meta: trimestre ${juego.meta} · ` : ""}{plural(juego.completos.length, "estudiante completó", "estudiantes completaron")} la simulación</span></div>
             <div className="stats game-kpis">
               <Stat label="Tiempo promedio" value={fmtMin(prom)} sub="por estudiante" />
-              <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.jugadores.length, "jugador", "jugadores")} />
+              <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.completos.length, "estudiante", "estudiantes")} />
               <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={`promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
-              <Stat label="Puntaje del juego" value={fmt(pun.length ? pun.reduce((a, b) => a + b, 0) / pun.length : null)} sub="promedio de la clase" />
+              {pun.length > 0
+                ? <Stat label="Puntaje del juego" value={fmt(pun.reduce((a, b) => a + b, 0) / pun.length)} sub="promedio de la clase" />
+                : <Stat label="Completaron la simulación" value={`${juego.completos.length} de ${juego.jugadores.length}`} sub={juego.meta ? `llegaron al trimestre ${juego.meta}` : "jugadores"} />}
             </div>
-            <GamePanel rows={conJ} equipos={juego.equipos} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />
-            {juego.sinEnlace.length > 0 && <p className="muted tiny">{plural(juego.sinEnlace.length, "jugador del informe no se enlazó", "jugadores del informe no se enlazaron")} con un estudiante de esta clase: {juego.sinEnlace.slice(0, 5).map((j) => displayName(j.nombre)).join(", ")}{juego.sinEnlace.length > 5 ? "…" : ""}.</p>}
+            <GamePanel rows={conJ} equipos={juego.equiposOk} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />
+            <IncompleteList items={juego.incompletos} equipos={juego.equiposFuera} meta={juego.meta} sinJuego={sinJuego} onPick={(r) => openStudent(r.r.id, [r.r.id])} />
           </section>
         );
       })()}

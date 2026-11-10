@@ -1057,6 +1057,21 @@ button.ms { cursor: pointer; }
 .qtable tr.faded td { opacity: .45; }
 .qtable tr.on td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .qtable .eq-cell { color: var(--text); font-size: 13.5px; margin: 0; }
+.inc-box { margin-top: 18px; border: 1px solid var(--sep); border-radius: 14px; padding: 4px 12px 8px; background: color-mix(in srgb, var(--warn) 4%, transparent); }
+.inc-box > p { margin: 6px 4px; }
+.inc-h { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 2px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.inc-h .rank-txt { flex: 1; }
+.inc-h[aria-expanded="true"] > svg:last-child { transform: rotate(90deg); }
+.inc-ico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn-ink); flex: none; }
+.inc-table tr.nolink { cursor: default; }
+.inc-table .eq-cell { margin-top: 1px; }
+.inc-hasta { display: inline-flex; align-items: center; gap: 8px; }
+.inc-hasta small { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.inc-prog { display: inline-flex; gap: 2px; }
+.inc-prog i { width: 9px; height: 9px; border-radius: 3px; background: var(--fill-2); }
+.inc-prog i.on { background: var(--warn); }
+.sgame.partial { border-left: 3px solid var(--warn); }
+.sg-kpis b.sm { font-size: 15px; }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }

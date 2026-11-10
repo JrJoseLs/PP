@@ -59,7 +59,9 @@ export interface Row {
   carrera: string;     // etiqueta visible
   grupo: string;
   equipo: string;     // equipo dentro del juego ("" si no se sabe)
-  juego?: Desempeno;  // tiempo y puntajes del informe igrades, si se importó y se enlazó
+  juego?: Desempeno;  // tiempo y puntajes del informe igrades, si se importó, se enlazó y completó la simulación
+  /** Datos del juego de quien NO completó la simulación: se registran, pero no entran en gráficos ni promedios */
+  juegoParcial?: Desempeno;
   q: string;           // texto de búsqueda
 }
 export const SIN_CARRERA = "Sin carrera";

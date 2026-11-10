@@ -120,6 +120,12 @@ export function buildDemo(): DemoDb {
           j.tiempos = w.map((x) => r2(((j.minutos ?? 0) * x) / sw));
           let cum = 0;
           j.historial = qv.map((v, k) => { cum += j.tiempos![k]; tEq[k] += j.tiempos![k]; return { t: k + 1, bsc_acum: acum[k], bsc: v, minutos: r2(cum), puntaje: null }; });
+          // ~8 % abandona antes del final: llega solo hasta T3–T5 (quedan «fuera de los gráficos»)
+          if (r() < 0.08) {
+            const h = 3 + Math.floor(r() * 3);
+            j.trimestres = h; j.tiempos = j.tiempos.map((v, k) => (k < h ? v : 0)); j.historial = j.historial.slice(0, h);
+            j.minutos = r2(j.tiempos.reduce((a, b) => a + b, 0)); j.bsc_acum = acum[h - 1]; j.bsc = qv[h - 1];
+          }
         });
         let cumEq = 0;
         equiposJuego.push({ clase_id: cId, equipo: t, trimestres: 6, bsc_acum: bscAcum, bsc, minutos: js.reduce((s, j) => s + (j.minutos ?? 0), 0),
@@ -128,7 +134,7 @@ export function buildDemo(): DemoDb {
       });
     });
   });
-  return { version: 4, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
+  return { version: 5, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
 }
 
 export const DEMO_ACCOUNTS = [

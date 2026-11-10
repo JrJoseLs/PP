@@ -6,10 +6,10 @@ import { Ring } from "./Charts";
 import { avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
 import { metricDesc, metricName } from "../lib/labels";
 import { EditStudentModal } from "./ClassEditor";
-import { StudentGame } from "./GameCharts";
+import { StudentGame, StudentGamePartial } from "./GameCharts";
 
 export default function StudentSheet({ id, list, onNav, onClose }: { id: string; list: string[]; onNav(id: string): void; onClose(): void }) {
-  const { rows, rowsByClase, user } = useApp();
+  const { rows, rowsByClase, user, juegoByClase } = useApp();
   const [invert, setInvert] = usePref("radarInvert", true);
   const [vs, setVs] = useState<"clase" | "carrera" | "ambos">("clase");
   const [editing, setEditing] = useState(false);
@@ -69,6 +69,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
       {editing && <EditStudentModal row={row} onClose={() => setEditing(false)} />}
 
       {row.juego && <StudentGame row={row} classRows={data.classRows} />}
+      {!row.juego && row.juegoParcial && <StudentGamePartial d={row.juegoParcial} meta={juegoByClase.get(row.r.clase_id)?.meta ?? 0} />}
 
       <div className="card pad">
         <div className="card-h">
