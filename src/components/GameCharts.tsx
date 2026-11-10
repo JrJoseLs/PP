@@ -1,4 +1,5 @@
-/* Gráficos del desempeño en el juego (informe igrades): tiempo invertido, Scorecard y puntajes. */
+/* Gráficos del desempeño en el juego (informe igrades): tiempo invertido y Scorecard acumulado.
+   Puntaje, percentil y Scorecard del último trimestre se importan pero no se muestran: dependen de la dificultad configurada. */
 import { useMemo, useState, type CSSProperties } from "react";
 import { fmt, displayName, plural, type Row } from "../lib/metrics";
 import { fmtMin, median, nTrim, pearson, promedioQ, ultimoT, valoresQ, type SerieQ } from "../lib/game";
@@ -7,15 +8,12 @@ import type { Desempeno, DesempenoEquipo } from "../lib/types";
 import type { Incompleto } from "../data/store";
 import { Icon, Segmented } from "./ui";
 
-export type EjeY = "indice" | "puntaje" | "bsc_acum";
+export type EjeY = "indice" | "bsc_acum";
 const EJE: Record<EjeY, { label: string; corto: string; get(r: Row): number | null }> = {
   indice: { label: "Índice de competencias", corto: "índice", get: (r) => r.indice },
-  puntaje: { label: "Puntaje del juego", corto: "puntaje", get: (r) => r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null },
   bsc_acum: { label: "Scorecard acumulado del equipo", corto: "Scorecard", get: (r) => r.juego?.bsc_acum ?? null },
 };
 /* Un color distinto por equipo: la paleta de la app y, si hay más equipos que colores, tonos repartidos por ángulo áureo. */
-/** El puntaje del juego solo viene en algunos informes: si nadie lo tiene, no se muestra en ningún lado */
-export const hayPuntaje = (xs: ({ puntaje?: number | null; puntaje_ajustado?: number | null } | undefined)[]) => xs.some((x) => x && (x.puntaje != null || x.puntaje_ajustado != null));
 export const teamColors = (equipos: string[]) => new Map([...new Set(equipos)].sort((a, b) => a.localeCompare(b, "es")).map((e, i) =>
   [e, i < SERIES_COLORS.length ? SERIES_COLORS[i] : `hsl(${Math.round((i * 137.508 + 20) % 360)} 70% 58%)`]));
 const eqDe = (r: Row) => r.juego?.equipo || r.equipo || "—";
@@ -36,8 +34,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
   rows: Row[]; onPick(r: Row): void; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void;
 }) {
   // sin informe de competencias todavía, se empieza por lo que sí hay
-  const conPun = hayPuntaje(rows.map((r) => r.juego));
-  const [eje, setEje] = useState<EjeY>(() => rows.some((r) => r.indice !== null) ? "indice" : rows.some((r) => r.juego?.bsc_acum != null) ? "bsc_acum" : "puntaje");
+  const [eje, setEje] = useState<EjeY>(() => (rows.some((r) => r.indice !== null) ? "indice" : "bsc_acum"));
   const [hover, setHover] = useState<Row | null>(null);
   const pts = rows.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined && EJE[eje].get(r) !== null);
   const own = useMemo(() => teamColors(rows.map(eqDe)), [rows]);
@@ -67,8 +64,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
       <div className="card-h">
         <Segmented size="sm" value={eje} onChange={setEje} options={[
           ...(rows.some((r) => r.indice !== null) ? [{ value: "indice" as const, label: "Competencias" }] : []),
-          { value: "bsc_acum" as const, label: "Scorecard" },
-          ...(conPun ? [{ value: "puntaje" as const, label: "Puntaje" }] : [])]} />
+          { value: "bsc_acum" as const, label: "Scorecard" }]} />
         {relacion && <span className="muted small">Relación tiempo–{EJE[eje].corto}: <b>{relacion}</b> (r = {r!.toFixed(2)})</span>}
       </div>
       <div className="tscatter-plot">
@@ -117,43 +113,37 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
   );
 }
 
-/* ---------- Tablero de equipos: Scorecard, tiempo, percentil; cada fila se abre con sus integrantes ---------- */
+/* ---------- Tablero de equipos: Scorecard acumulado y tiempo; cada fila se abre con sus integrantes ---------- */
 export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus, onPick }: {
   equipos: DesempenoEquipo[]; rows?: Row[]; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void; onPick?(r: Row): void;
 }) {
   const lista = [...equipos].sort((a, b) => (b.bsc_acum ?? -1) - (a.bsc_acum ?? -1));
-  const maxB = Math.max(1, ...lista.map((e) => Math.max(e.bsc_acum ?? 0, e.bsc ?? 0)));
+  const maxB = Math.max(1, ...lista.map((e) => e.bsc_acum ?? 0));
   const miembros = (e: string) => rows.filter((r) => sameEq(eqDe(r), e)).sort((a, b) => (b.juego?.minutos ?? -1) - (a.juego?.minutos ?? -1));
   const porPersona = (e: DesempenoEquipo) => { const n = miembros(e.equipo).length; return e.minutos !== null && n ? e.minutos / n : null; };
   const maxM = Math.max(1, ...lista.map((e) => porPersona(e) ?? e.minutos ?? 0));
   const maxMin = Math.max(1, ...rows.map((r) => r.juego?.minutos ?? 0));
   const colors = colorsIn ?? teamColors(equipos.map((e) => e.equipo));
-  const conPun = hayPuntaje(equipos) || hayPuntaje(rows.map((r) => r.juego));
   const conPersonas = rows.length > 0;
+  const conComp = rows.some((r) => r.indice !== null);
   return (
     <div className="tboard">
       <div className="tb-row tb-h">
-        <span>Equipo</span><span>Scorecard acumulado <i className="mk" /> último trimestre</span>
-        <span>{conPersonas ? "Tiempo por integrante" : "Tiempo total"}</span><span className="num">Percentil</span><span className="num">{conPun ? "Puntaje" : "Llegó a"}</span>
+        <span>Equipo</span><span>Scorecard acumulado</span><span>{conPersonas ? "Tiempo por integrante" : "Tiempo total"}</span>
       </div>
       {lista.map((e, i) => {
         const open = !!focus && sameEq(focus, e.equipo);
         const ms = open ? miembros(e.equipo) : [];
         const tpp = conPersonas ? porPersona(e) : e.minutos;
-        const tend = e.bsc !== null && e.bsc_acum !== null ? (e.bsc >= e.bsc_acum ? "up" : "down") : null;
         return (
           <div key={e.equipo} className={"tb-item" + (open ? " open" : "") + (focus && !open ? " faded" : "")}>
             <button type="button" className="tb-row tb-btn" onClick={() => onFocus?.(open ? null : e.equipo)} aria-expanded={open} disabled={!onFocus}>
               <span className="tb-n"><b>{i + 1}</b><span className="dot" style={{ background: colors.get(e.equipo) }} /><span className="tb-name">{e.equipo}</span>
                 {conPersonas && <small className="muted">{miembros(e.equipo).length}</small>}</span>
-              <span className="tb-bar" title={`Acumulado ${fmt(e.bsc_acum)} · último trimestre ${fmt(e.bsc)}`}>
-                <i style={{ width: ((e.bsc_acum ?? 0) / maxB) * 100 + "%", background: colors.get(e.equipo) }} />
-                {e.bsc !== null && <em style={{ left: ((e.bsc ?? 0) / maxB) * 100 + "%" }} />}
-                <small>{fmt(e.bsc_acum)}{tend && <span className={"tend " + tend}>{tend === "up" ? "▲" : "▼"}</span>}</small>
+              <span className="tb-bar" title={`Scorecard acumulado ${fmt(e.bsc_acum)}`}>
+                <i style={{ width: ((e.bsc_acum ?? 0) / maxB) * 100 + "%", background: colors.get(e.equipo) }} /><small>{fmt(e.bsc_acum)}</small>
               </span>
               <span className="tb-bar time" title={`Total del equipo ${fmtMin(e.minutos)}`}><i style={{ width: ((tpp ?? 0) / maxM) * 100 + "%" }} /><small>{fmtMin(tpp)}</small></span>
-              <span className="num">{e.percentil !== null ? <span className={"chip" + ((e.percentil ?? 0) >= 66 ? " alto" : (e.percentil ?? 0) < 34 ? " bajo" : "")}>{Math.round(e.percentil!)}</span> : <span className="muted">n/A</span>}</span>
-              <span className="num">{conPun ? <b>{e.puntaje !== null ? fmt(e.puntaje) : "—"}</b> : <b>{ultimoT(e) ? "T" + ultimoT(e) : "—"}</b>}</span>
             </button>
             {open && (
               <div className="tb-members">
@@ -162,8 +152,7 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
                   <button type="button" key={r.r.id} className="tbm" onClick={() => onPick?.(r)}>
                     <span className="tbm-n">{displayName(r.r.nombre)}</span>
                     <span className="tb-bar time"><i style={{ width: ((r.juego?.minutos ?? 0) / maxMin) * 100 + "%", background: colors.get(e.equipo), opacity: .7 }} /><small>{fmtMin(r.juego?.minutos ?? null)}</small></span>
-                    {conPun ? <span className="num"><small className="muted">puntaje</small> <b>{fmt(r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null)}</b></span> : <span />}
-                    <span className="num"><small className="muted">índice</small> <b>{fmt(r.indice)}</b></span>
+                    {conComp ? <span className="num"><small className="muted">competencias</small> <b>{fmt(r.indice)}</b></span> : <span />}
                   </button>
                 ))}
                 <p className="muted tiny">Total del equipo: {fmtMin(e.minutos)}{e.trimestres ? ` · ${e.trimestres} trimestres` : ""}. Toca un integrante para abrir su ficha.</p>
@@ -172,21 +161,20 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
           </div>
         );
       })}
-      <p className="muted tiny">Ordenados por Scorecard acumulado. ▲/▼ = el último trimestre quedó por encima o por debajo del acumulado. Percentil frente a todos los equipos del simulador («n/A» = aún no completó los trimestres necesarios).{onFocus ? " Toca un equipo para ver sus integrantes." : ""}</p>
+      <p className="muted tiny">Ordenados por Scorecard acumulado.{onFocus ? " Toca un equipo para ver sus integrantes." : ""}</p>
     </div>
   );
 }
 
 /* ---------- Tabla por estudiante: tiempo, puntaje, Scorecard, competencias y perfil ---------- */
-type ColJ = "nombre" | "equipo" | "minutos" | "puntaje" | "bsc" | "indice";
+type ColJ = "nombre" | "equipo" | "minutos" | "bsc" | "indice";
 export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[]; colors: Map<string, string>; focus?: string | null; onPick(r: Row): void }) {
   const [sort, setSort] = useState<{ k: ColJ; asc: boolean }>({ k: "minutos", asc: false });
   const [q, setQ] = useState("");
   const perfil = useMemo(() => perfiles(rows), [rows]);
-  const conPun = hayPuntaje(rows.map((r) => r.juego));
   const conComp = rows.some((r) => r.indice !== null);
   const val = (r: Row, k: ColJ): number | string | null => k === "nombre" ? displayName(r.r.nombre) : k === "equipo" ? eqDe(r)
-    : k === "minutos" ? r.juego?.minutos ?? null : k === "puntaje" ? r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null
+    : k === "minutos" ? r.juego?.minutos ?? null
     : k === "bsc" ? r.juego?.bsc_acum ?? null : r.indice;
   const pm = median(rows.map((r) => r.juego?.minutos).filter((x): x is number => typeof x === "number"));
   const maxMin = Math.max(1, ...rows.map((r) => r.juego?.minutos ?? 0));
@@ -209,7 +197,7 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
       </div>
       <div className="table-scroll sgt-scroll">
         <table className="etable sgt">
-          <thead><tr>{th("nombre", "Estudiante")}{th("minutos", "Tiempo en el juego")}{conPun && th("puntaje", "Puntaje", "num")}{th("bsc", "Scorecard eq.", "num")}{conComp && <>{th("indice", "Competencias", "num")}<th>Perfil</th></>}</tr></thead>
+          <thead><tr>{th("nombre", "Estudiante")}{th("minutos", "Tiempo en el juego")}{th("bsc", "Scorecard acumulado", "num")}{conComp && <>{th("indice", "Competencias", "num")}<th>Perfil</th></>}</tr></thead>
           <tbody>
             {lista.map((r) => {
               const m = r.juego?.minutos ?? null, p = perfil(r);
@@ -221,7 +209,6 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
                     <span className="tb-bar time slim"><i style={{ width: ((m ?? 0) / maxMin) * 100 + "%" }} />{pm && <em className="avg" style={{ left: (pm / maxMin) * 100 + "%" }} />}</span><b className="tval">{fmtMin(m)}</b>
                     {dif !== null && <span className={"dif " + (dif >= 0 ? "pos" : "neg")}>{dif >= 0 ? "+" : ""}{dif}%</span>}</div>
                   </td>
-                  {conPun && <td className="num">{fmt(val(r, "puntaje") as number | null)}</td>}
                   <td className="num">{fmt(val(r, "bsc") as number | null)}</td>
                   {conComp && <><td className="num"><b>{fmt(r.indice)}</b></td>
                   <td>{p >= 0 ? <span className={"pf " + PERFIL_CLS[p]}>{PERFILES[p as 0 | 1 | 2 | 3]}</span> : <span className="muted">—</span>}</td></>}
@@ -288,11 +275,10 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
       </div>
       {j.tiempos && j.tiempos.length > 0 && <TrimestreBars mine={j.tiempos} classRows={classRows} />}
       <TeamEvolution row={row} classRows={classRows} />
-      <div className="sg-kpis">
-        {j.puntaje == null && j.puntaje_ajustado == null ? <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div> : <div><small>Puntaje del juego</small><b>{fmt(j.puntaje_ajustado ?? j.puntaje)}</b>{j.puntaje_ajustado !== null && j.puntaje !== null && j.puntaje_ajustado !== j.puntaje && <em>automático {fmt(j.puntaje)}</em>}</div>}
+      <div className="sg-kpis k3">
+        <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div>
         <div><small>Scorecard acumulado del equipo</small><b>{fmt(j.bsc_acum)}</b></div>
-        <div><small>Scorecard del último trimestre</small><b>{fmt(j.bsc)}</b>{j.bsc_acum !== null && j.bsc !== null && <em className={j.bsc >= j.bsc_acum ? "pos" : "neg"}>{j.bsc >= j.bsc_acum ? "▲ mejorando" : "▼ por debajo del acumulado"}</em>}</div>
-        <div><small>Trimestres jugados</small><b>{j.trimestres ?? "—"}</b></div>
+        <div><small>Trimestres jugados</small><b>{ultimoT(j) || "—"}</b></div>
       </div>
     </div>
   );
@@ -330,12 +316,12 @@ function TrimestreBars({ mine, classRows }: { mine: number[]; classRows: Row[] }
   );
 }
 
-/* ---------- Comparar: tiempo, puntaje y Scorecard entre series ---------- */
+/* ---------- Comparar: tiempo y Scorecard acumulado entre series ---------- */
 export function GameBars({ series }: { series: { name: string; color: string; rows: Row[] }[] }) {
   const avg = (rr: Row[], f: (r: Row) => number | null | undefined) => { const v = rr.map(f).filter((x): x is number => typeof x === "number"); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const datos = series.map((s) => ({ ...s, min: avg(s.rows, (r) => r.juego?.minutos), pun: avg(s.rows, (r) => r.juego?.puntaje_ajustado ?? r.juego?.puntaje), bsc: avg(s.rows, (r) => r.juego?.bsc_acum), n: s.rows.filter((r) => r.juego).length }));
+  const datos = series.map((s) => ({ ...s, min: avg(s.rows, (r) => r.juego?.minutos), bsc: avg(s.rows, (r) => r.juego?.bsc_acum), n: s.rows.filter((r) => r.juego).length }));
   if (!datos.some((d) => d.n)) return <p className="muted">Ninguno de los elementos elegidos tiene desempeño del juego importado (informe «igrades»).</p>;
-  const bloque = (titulo: string, k: "min" | "pun" | "bsc", f: (v: number | null) => string) => {
+  const bloque = (titulo: string, k: "min" | "bsc", f: (v: number | null) => string) => {
     const max = Math.max(1, ...datos.map((d) => d[k] ?? 0));
     return (
       <div className="gb-block"><h4 className="sub-h">{titulo}</h4>
@@ -349,7 +335,6 @@ export function GameBars({ series }: { series: { name: string; color: string; ro
   return (
     <div className="gbars">
       {bloque("Tiempo promedio por estudiante", "min", fmtMin)}
-      {datos.some((d) => d.pun !== null) && bloque("Puntaje promedio del juego", "pun", (v) => fmt(v))}
       {bloque("Scorecard acumulado promedio", "bsc", (v) => fmt(v))}
       <CompareQuarters series={series} />
       <p className="muted tiny">Solo cuentan los estudiantes con desempeño importado: {datos.map((d) => `${d.name} ${d.n}`).join(" · ")}.</p>
@@ -416,8 +401,8 @@ export function QuarterPanel({ equipos, colors, focus, onFocus }: {
   equipos: DesempenoEquipo[]; colors: Map<string, string>; focus: string | null; onFocus(e: string | null): void;
 }) {
   const n = nTrim(equipos);
-  const disponibles = (["bsc", "bsc_acum", "tiempo"] as SerieQ[]).filter((k) => equipos.some((e) => valoresQ(e, k, n).filter((v) => v !== null).length > 0));
-  const [k, setK] = useState<SerieQ>(disponibles[0] ?? "bsc");
+  const disponibles = (["bsc_acum", "tiempo"] as SerieQ[]).filter((k) => equipos.some((e) => valoresQ(e, k, n).filter((v) => v !== null).length > 0));
+  const [k, setK] = useState<SerieQ>(disponibles[0] ?? "bsc_acum");
   const f = qFmt(k);
   const series = equipos.map((e) => ({ name: e.equipo, color: colors.get(e.equipo) ?? "#888", values: valoresQ(e, k, n),
     dim: !!focus && !sameEq(e.equipo, focus), bold: !!focus && sameEq(e.equipo, focus) }));
@@ -433,7 +418,7 @@ export function QuarterPanel({ equipos, colors, focus, onFocus }: {
   return (
     <div className="qpanel">
       <div className="card-h">
-        <Segmented size="sm" value={k} onChange={setK} options={disponibles.map((x) => ({ value: x, label: x === "bsc" ? "Scorecard del trimestre" : x === "bsc_acum" ? "Acumulado" : "Tiempo" }))} />
+        <Segmented size="sm" value={k} onChange={setK} options={disponibles.map((x) => ({ value: x, label: x === "bsc_acum" ? "Scorecard acumulado" : "Tiempo" }))} />
         {mejora.length > 0 && <span className="muted small">Mayor mejora: <b>{mejora[0].s.name}</b> ({mejora[0].d! >= 0 ? "+" : ""}{f(mejora[0].d)})</span>}
       </div>
       <QuarterLines n={n} k={k} onPick={(name) => onFocus(focus && sameEq(focus, name) ? null : name)}
@@ -469,16 +454,16 @@ export function QuarterPanel({ equipos, colors, focus, onFocus }: {
 function TeamEvolution({ row, classRows }: { row: Row; classRows: Row[] }) {
   const j = row.juego!;
   const n = nTrim([j]);
-  const mine = valoresQ(j, "bsc", n);
+  const mine = valoresQ(j, "bsc_acum", n);
   if (mine.filter((v) => v !== null).length < 2) return null;
-  const prom = promedioQ(classRows.filter((r) => r.juego).map((r) => valoresQ(r.juego!, "bsc", n)), n);
+  const prom = promedioQ(classRows.filter((r) => r.juego).map((r) => valoresQ(r.juego!, "bsc_acum", n)), n);
   const last = mine.reduce<number | null>((a, v) => (v !== null ? v : a), null), first = mine.find((v) => v !== null) ?? null;
   const d = last !== null && first !== null ? last - first : null;
   return (
     <div className="sg-trim">
-      <h4 className="sub-h">Scorecard de tu equipo por trimestre</h4>
+      <h4 className="sub-h">Scorecard acumulado de tu equipo por trimestre</h4>
       {d !== null && <p className="small">Del primer al último trimestre tu equipo {Math.abs(d) < 0.5 ? "se mantuvo estable" : d > 0 ? <>mejoró <b className="pos">+{fmt(d)}</b> puntos</> : <>bajó <b className="neg">{fmt(d)}</b> puntos</>}.</p>}
-      <QuarterLines n={n} k="bsc" height={200} series={[
+      <QuarterLines n={n} k="bsc_acum" height={200} series={[
         { name: j.equipo || "Tu equipo", color: "var(--accent)", values: mine, bold: true },
         { name: "Promedio de la clase", color: "var(--text-2)", values: prom, dashed: true }]} />
     </div>
@@ -489,13 +474,13 @@ function TeamEvolution({ row, classRows }: { row: Row; classRows: Row[] }) {
 function CompareQuarters({ series }: { series: { name: string; color: string; rows: Row[] }[] }) {
   const js = series.flatMap((s) => s.rows.map((r) => r.juego).filter((x): x is NonNullable<typeof x> => !!x));
   const n = nTrim(js);
-  const [k, setK] = useState<SerieQ>("bsc");
+  const [k, setK] = useState<SerieQ>("bsc_acum");
   const qs = series.map((s) => ({ name: s.name, color: s.color, values: promedioQ(s.rows.filter((r) => r.juego).map((r) => valoresQ(r.juego!, k, n)), n) }));
   if (n < 2 || !qs.some((q) => q.values.filter((v) => v !== null).length >= 2)) return null;
   return (
     <div className="gb-block">
       <div className="card-h"><h4 className="sub-h">Por trimestre</h4>
-        <Segmented size="sm" value={k} onChange={setK} options={[{ value: "bsc", label: "Scorecard" }, { value: "bsc_acum", label: "Acumulado" }, { value: "tiempo", label: "Tiempo" }]} /></div>
+        <Segmented size="sm" value={k} onChange={setK} options={[{ value: "bsc_acum", label: "Scorecard acumulado" }, { value: "tiempo", label: "Tiempo" }]} /></div>
       <QuarterLines n={n} k={k} height={230} series={qs} />
     </div>
   );

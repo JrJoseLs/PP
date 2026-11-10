@@ -26,14 +26,13 @@ export default function Estudiantes() {
 
   const sparse = useMemo(() => sparseMetrics(allRows, metrics), [allRows, metrics]);
   const cols = metrics.filter((m) => !sparse.has(m));
-  // columnas del juego (tiempo y puntaje) solo si hay algún informe igrades importado
+  // columnas del juego (tiempo y Scorecard acumulado) solo si hay algún informe igrades importado
   const conJuego = allRows.some((r) => r.juego);
-  const conPun = allRows.some((r) => r.juego && (r.juego.puntaje != null || r.juego.puntaje_ajustado != null));
 
   const list = useMemo(() => {
     const out = [...rows];
     const get = (r: Row): number | string => sort.k === "nombre" ? displayName(r.r.nombre) : sort.k === "clase" ? r.cls.nombre : sort.k === "carrera" ? r.carrera
-      : sort.k === "indice" ? r.indice ?? -1 : sort.k === "minutos" ? r.juego?.minutos ?? -1 : sort.k === "puntaje" ? r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? -1
+      : sort.k === "indice" ? r.indice ?? -1 : sort.k === "minutos" ? r.juego?.minutos ?? -1 : sort.k === "bsc" ? r.juego?.bsc_acum ?? -1
       : metricValue(r, sort.k) ?? -1;
     return out.sort((a, b) => { const x = get(a), y = get(b); return (typeof x === "string" ? x.localeCompare(y as string, "es") : x - (y as number)) * sort.dir; });
   }, [rows, sort]);
@@ -48,7 +47,7 @@ export default function Estudiantes() {
     const data = list.map((r) => {
       const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Equipo: r.equipo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "",
         "Tiempo en el juego [min]": r.juego?.minutos === null || r.juego?.minutos === undefined ? null : Math.round(r.juego.minutos),
-        ...(conPun ? { "Puntaje del juego": r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null } : {}), "Scorecard acumulado (equipo)": r.juego?.bsc_acum ?? null,
+        "Scorecard acumulado (equipo)": r.juego?.bsc_acum ?? null,
         "Simulación": r.juego ? "Completa" : r.juegoParcial ? `Incompleta (llegó a T${ultimoT(r.juegoParcial)})` : "" };
       metrics.forEach((m) => { o[metricName(m)] = metricValue(r, m); });
       return o;
@@ -74,7 +73,7 @@ export default function Estudiantes() {
             <thead><tr>
               {th("nombre", "Estudiante", "sticky")}
               {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th><th className="hide-sm">Equipo</th>{th("indice", "Índice", "num")}<th>Nivel</th>
-                {conJuego && <>{th("minutos", "Tiempo", "num hide-sm")}{conPun && th("puntaje", "Puntaje", "num hide-sm")}</>}</>
+                {conJuego && <>{th("minutos", "Tiempo", "num hide-sm")}{th("bsc", "Scorecard", "num hide-sm")}</>}</>
                 : <>{th("indice", "Índice", "num")}{cols.map((m) => <th key={m} className="vert" title={metricName(m) + (metricDesc(m) ? " · " + metricDesc(m) : "")}><button className={"th" + (sort.k === m ? " on" : "")} onClick={() => setSort({ k: m, dir: sort.k === m ? (-sort.dir as 1 | -1) : -1 })}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></button></th>)}</>}
             </tr></thead>
             <tbody>
@@ -90,7 +89,7 @@ export default function Estudiantes() {
                     <td><LevelChip v={r.indice} /></td>
                     {conJuego && <>
                       <td className="num muted hide-sm">{r.juego ? fmtMin(r.juego.minutos) : r.juegoParcial ? <span className="pf warn" title="No completó la simulación: no cuenta en gráficos ni promedios">Incompleto · T{ultimoT(r.juegoParcial)}</span> : "—"}</td>
-                      {conPun && <td className="num hide-sm">{fmt(r.juego?.puntaje_ajustado ?? r.juego?.puntaje ?? null)}</td>}
+                      <td className="num hide-sm">{fmt(r.juego?.bsc_acum ?? null)}</td>
                     </>}
                   </> : <>
                     <td className={"num hc " + (levelOf(r.indice)?.id ?? "")}><b>{fmt(r.indice, 0)}</b></td>

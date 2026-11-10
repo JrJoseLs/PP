@@ -120,7 +120,6 @@ export default function ClaseDetalle() {
         const total = juego.completos.reduce((a, j) => a + (j.minutos ?? 0), 0);
         const prom = juego.completos.length ? total / juego.completos.length : null;
         const bscs = juego.equiposOk.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
-        const pun = juego.completos.map((j) => j.puntaje_ajustado ?? j.puntaje).filter((x): x is number => x !== null);
         const sinJuego = d.rr.filter((r) => !r.juego && !r.juegoParcial).length;
         return (
           <section className="card pad game-sec">
@@ -129,9 +128,7 @@ export default function ClaseDetalle() {
               <Stat label="Tiempo promedio" value={fmtMin(prom)} sub="por estudiante" />
               <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.completos.length, "estudiante", "estudiantes")} />
               <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={`promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
-              {pun.length > 0
-                ? <Stat label="Puntaje del juego" value={fmt(pun.reduce((a, b) => a + b, 0) / pun.length)} sub="promedio de la clase" />
-                : <Stat label="Completaron la simulación" value={`${juego.completos.length} de ${juego.jugadores.length}`} sub={juego.meta ? `llegaron al trimestre ${juego.meta}` : "jugadores"} />}
+              <Stat label="Completaron la simulación" value={`${juego.completos.length} de ${juego.jugadores.length}`} sub={juego.meta ? `llegaron al trimestre ${juego.meta}` : "jugadores"} />
             </div>
             <GamePanel rows={conJ} equipos={juego.equiposOk} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />
             <IncompleteList items={juego.incompletos} equipos={juego.equiposFuera} meta={juego.meta} sinJuego={sinJuego} onPick={(r) => openStudent(r.r.id, [r.r.id])} />

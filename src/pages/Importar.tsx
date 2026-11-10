@@ -21,7 +21,7 @@ import { PALETTE } from "../data/demoSeed";
 import { PageHead } from "./Dashboard";
 import { D, low } from "../lib/labels";
 import { friendlyError } from "../data/api";
-import { MSG, checkPayload, payloadToFile } from "../lib/marketplace";
+import { MSG, READY_INFO, checkPayload, payloadToFile } from "../lib/marketplace";
 
 type Est = ClaseDraft["estudiantes"][number];
 /** Enlace de un estudiante del informe con el directorio */
@@ -74,11 +74,11 @@ export default function Importar() {
         const file = await payloadToFile(c.payload);
         setTab("importar");
         setIncoming((f) => [...f, file]);
-        toast(`Recibido desde Marketplace: ${plural(c.estudiantes, "estudiante", "estudiantes")}. Revisa y guarda.`);
+        toast(c.tipo === "juego" ? `Recibido desde Marketplace: desempeño del juego de ${plural(c.estudiantes, "jugador", "jugadores")}. Revisa la clase y guarda.` : `Recibido desde Marketplace: ${plural(c.estudiantes, "estudiante", "estudiantes")}. Revisa y guarda.`);
       } catch (e) { seen.current.delete(c.payload.requestId); toast(friendlyError(e), "error"); }
     };
     window.addEventListener("message", receive);
-    window.postMessage({ type: MSG.ready }, location.origin);   // la extensión espera esta señal para enviar
+    window.postMessage({ type: MSG.ready, ...READY_INFO }, location.origin);   // la extensión espera esta señal para enviar
     return () => window.removeEventListener("message", receive);
   }, []); // eslint-disable-line
 

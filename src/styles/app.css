@@ -971,7 +971,7 @@ button.ms { cursor: pointer; }
 .ts-tip { position: absolute; transform: translate(12px, -50%); pointer-events: none; z-index: 3; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: 10px; background: var(--elev); box-shadow: var(--shadow-2); border: 1px solid var(--sep); font-size: 12.5px; white-space: nowrap; }
 .ts-tip span { color: var(--text-3); font-size: 12px; }
 .tboard { display: flex; flex-direction: column; font-size: 13.5px; }
-.tb-row { display: grid; grid-template-columns: minmax(150px, 1.3fr) 2fr 1.2fr 70px 70px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--sep); }
+.tb-row { display: grid; grid-template-columns: minmax(150px, 1.3fr) 2fr 1.4fr; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--sep); }
 .tb-row:last-of-type { border-bottom: 0; }
 .tb-h { font-size: 12px; font-weight: 600; color: var(--text-3); }
 .tb-h .mk { display: inline-block; width: 2px; height: 11px; background: var(--text); vertical-align: -1px; margin: 0 4px; }
@@ -1005,7 +1005,7 @@ button.ms { cursor: pointer; }
 .tb-bar .tend { margin-left: 4px; font-size: 9px; }
 .tb-bar .tend.up { color: var(--good-ink); } .tb-bar .tend.down { color: var(--bad-ink); }
 .tb-members { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 10px 34px; }
-.tbm { display: grid; grid-template-columns: minmax(140px, 1.3fr) 2fr 100px 90px; gap: 12px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 0; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.tbm { display: grid; grid-template-columns: minmax(140px, 1.3fr) 2fr 120px; gap: 12px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 0; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .tbm:hover { background: var(--fill-2); }
 .tbm .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbm-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1028,7 +1028,7 @@ button.ms { cursor: pointer; }
 .pf.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good-ink); }
 .pf.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn-ink); }
 .pf.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad-ink); }
-@media (max-width: 700px) { .tbm { grid-template-columns: 1fr 1fr; } .tbm > :nth-child(4) { display: none; } .tb-members { padding-left: 8px; } }
+@media (max-width: 700px) { .tbm { grid-template-columns: 1fr 1fr; } .tbm > :nth-child(3) { display: none; } .tb-members { padding-left: 8px; } }
 .gc-nueva { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; padding: 12px; border-radius: 12px; background: var(--fill-1); }
 .gc-nueva .title-input { font-size: 17px; }
 .sg-trim { margin: 0 0 14px; }
@@ -1084,11 +1084,12 @@ button.ms { cursor: pointer; }
 .sg-kpis > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); }
 .sg-kpis small { font-size: 11.5px; color: var(--text-3); }
 .sg-kpis b { font: 700 20px var(--font-d); font-variant-numeric: tabular-nums; }
+.sg-kpis.k3 { grid-template-columns: repeat(3, 1fr); }
 .sg-kpis em { font-style: normal; font-size: 11.5px; color: var(--text-3); }
 .gbars { display: flex; flex-direction: column; gap: 6px; }
 .gb-block .mbar-tracks { margin-right: 80px; }
 .mbar-track em.wide { right: -78px; width: 74px; }
-@media (max-width: 700px) { .tb-row { grid-template-columns: 1fr 1.4fr 60px; } .tb-row > :nth-child(3), .tb-row > :nth-child(5) { display: none; } .sg-bar { grid-template-columns: 1fr 80px; } .sg-bar .sg-track { grid-column: 1 / -1; grid-row: 2; } .sg-kpis { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) { .tb-row { grid-template-columns: 1fr 1.3fr 1fr; } .sg-bar { grid-template-columns: 1fr 80px; } .sg-bar .sg-track { grid-column: 1 / -1; grid-row: 2; } .sg-kpis { grid-template-columns: 1fr 1fr; } }
 
 /* ---------- Impresión: la ficha del estudiante sola, lista para entregar ---------- */
 @media print {

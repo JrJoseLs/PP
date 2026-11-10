@@ -126,7 +126,7 @@ export function GameCard({ job, drafts, onTarget, onNueva, onSave, onClose }: {
         <div className="ctable">
           {top.map((e) => (
             <div className="ct-row" key={e.equipo}><span>{e.equipo}</span><span className="muted">{fmtMin(e.minutos)}</span>
-              <span className="muted small">Scorecard {fmt(e.bsc_acum)} · último {fmt(e.bsc)}</span><b>{e.puntaje !== null ? fmt(e.puntaje) : "—"}</b></div>
+              <b>Scorecard {fmt(e.bsc_acum)}</b></div>
           ))}
         </div>
       )}
