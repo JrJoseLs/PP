@@ -3,7 +3,7 @@ import { useApp, usePref } from "../data/store";
 import { Avatar, Delta, Icon, LevelChip, Segmented, Sheet } from "./ui";
 import { Radar, type Series } from "./Radar";
 import { Ring } from "./Charts";
-import { avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
+import { SIN_CARRERA, avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
 import { metricDesc, metricName } from "../lib/labels";
 import { EditStudentModal } from "./ClassEditor";
 import { StudentGame, StudentGamePartial } from "./GameCharts";
@@ -19,7 +19,11 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
     if (!row) return null;
     const m = row.cls.metrics;
     const classRows = rowsByClase.get(row.cls.id) ?? [];
-    const carRows = rows.filter((r) => r.carrera === row.carrera);
+    // sin carrera asignada no hay con quién compararlo: «Sin carrera» mezclaría estudiantes de cualquier carrera
+    const conCarrera = !!row.r.carrera && row.carrera !== SIN_CARRERA;
+    const carRows = conCarrera ? rows.filter((r) => r.carrera === row.carrera) : [];
+    // si todos los de su carrera están en esta misma clase, los dos promedios son idénticos
+    const mismaGente = conCarrera && carRows.length === classRows.filter((r) => r.carrera === row.carrera).length && carRows.length === classRows.length;
     const clsAvg = avgVector(classRows, m), carAvg = avgVector(carRows, m);
     const ranked = classRows.filter((r) => r.indice !== null).sort((a, b) => b.indice! - a.indice!);
     const rank = ranked.findIndex((r) => r === row) + 1;
@@ -29,14 +33,15 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
     const pos = deltas.filter((x) => !isRisk(x.name)).sort((a, b) => b.d - a.d);
     const riskHigh = deltas.filter((x) => isRisk(x.name) && x.v >= 50).sort((a, b) => b.v - a.v);
     const others = rows.filter((r) => r !== row && personKey(r.r) === personKey(row.r));
-    return { m, classRows, carRows, clsAvg, carAvg, rank, total: ranked.length, pos, riskHigh, deltas, others };
+    return { m, classRows, carRows, conCarrera, mismaGente, clsAvg, carAvg, rank, total: ranked.length, pos, riskHigh, deltas, others };
   }, [row, rows, rowsByClase]);
 
   if (!row || !data) return null;
   const idx = list.indexOf(id);
   const series: Series[] = [{ name: displayName(row.r.nombre).split(" ").slice(0, 2).join(" "), color: row.cls.color, values: row.r.valores }];
-  if (vs !== "carrera") series.push({ name: "Promedio de la clase", color: "var(--text-3)", values: data.clsAvg as number[], dash: true, muted: true });
-  if (vs !== "clase") series.push({ name: "Promedio de " + row.carrera, color: "var(--accent-2)", values: data.carAvg as number[], dash: true, muted: true });
+  const modo = data.conCarrera ? vs : "clase";
+  if (modo !== "carrera") series.push({ name: "Promedio de la clase", color: "var(--text-3)", values: data.clsAvg as number[], dash: true, muted: true });
+  if (modo !== "clase") series.push({ name: `Promedio de ${row.carrera} (${data.carRows.length})`, color: "var(--accent-2)", values: data.carAvg as number[], dash: true, muted: true });
   const pct = data.total > 1 ? Math.round((1 - (data.rank - 1) / (data.total - 1)) * 100) : null;
 
   return (
@@ -74,8 +79,12 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
       <div className="card pad">
         <div className="card-h">
           <h3>Perfil de competencias</h3>
-          <Segmented size="sm" value={vs} onChange={setVs} options={[{ value: "clase", label: "vs clase" }, { value: "carrera", label: "vs carrera" }, { value: "ambos", label: "ambos" }]} />
+          {data.conCarrera
+            ? <Segmented size="sm" value={vs} onChange={setVs} options={[{ value: "clase", label: "vs clase" }, { value: "carrera", label: "vs carrera" }, { value: "ambos", label: "ambos" }]} />
+            : <span className="muted small">vs promedio de la clase</span>}
         </div>
+        {!data.conCarrera && <p className="muted small">Este estudiante no tiene carrera asignada, así que no se puede comparar con su carrera. Asígnala con <b>Editar</b> o subiendo el directorio.</p>}
+        {data.conCarrera && data.mismaGente && modo !== "clase" && <p className="muted small">Todos los de {row.carrera} están en esta clase: el promedio de la carrera coincide con el de la clase y las dos líneas se superponen.</p>}
         <Radar labels={data.m} series={series} size={520} invert={invert} onInvert={setInvert} />
       </div>
 
