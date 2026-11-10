@@ -1039,6 +1039,24 @@ button.ms { cursor: pointer; }
 .trim-bars i.me { background: var(--accent); }
 .trim b { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .trim small { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.qlines svg { width: 100%; height: auto; display: block; }
+.qlines .gl { stroke: var(--sep); }
+.qlines .tk { font-size: 10.5px; fill: var(--text-3); }
+.qlines .qhover { fill: var(--fill-1); }
+.qs path { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; transition: opacity .15s; }
+.qs circle { stroke: var(--card); stroke-width: 1.2; }
+.qs.dim { opacity: .13; }
+.qs.bold path { stroke-width: 3.4; }
+.q-tip { transform: translate(14px, 0); }
+.q-tip span { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.q-tip span b { margin-left: auto; padding-left: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
+.qpanel .card-h { margin-bottom: 6px; }
+.qtable-wrap { margin-top: 12px; max-height: 420px; }
+.qtable td small { font-size: 9.5px; }
+.qtable tr.avg-row td { background: var(--fill-1); font-style: italic; }
+.qtable tr.faded td { opacity: .45; }
+.qtable tr.on td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.qtable .eq-cell { color: var(--text); font-size: 13.5px; margin: 0; }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }

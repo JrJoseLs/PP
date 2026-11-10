@@ -106,15 +106,29 @@ export function buildDemo(): DemoDb {
         const js = jugadores.filter((j) => j.equipo === t && j.clase_id === cId) as (Desempeno & { _a: number })[];
         if (!js.length) return;
         const aMed = js.reduce((s, j) => s + j._a, 0) / js.length;
-        const bscAcum = Math.round(Math.max(5, 38 + aMed * 14 + gauss() * 6) * 100) / 100;
-        const bsc = Math.round(bscAcum * (0.75 + r() * 0.6) * 100) / 100;
-        js.forEach((j) => { j.bsc_acum = bscAcum; j.bsc = bsc; delete (j as Partial<typeof j>)._a; });
+        // 6 trimestres: el Scorecard de cada uno sube con la práctica y oscila; el acumulado es su promedio
+        const NQ = 6, r2 = (v: number) => Math.round(v * 100) / 100;
+        const nivel = 38 + aMed * 14 + gauss() * 4, ritmo = 0.05 + r() * 0.08;
+        const qv = Array.from({ length: NQ }, (_, k) => r2(Math.max(2, nivel * (0.72 + ritmo * k) + gauss() * 6)));
+        const acum = qv.map((_, k) => r2(qv.slice(0, k + 1).reduce((a, b) => a + b, 0) / (k + 1)));
+        const bscAcum = acum[NQ - 1], bsc = qv[NQ - 1];
+        const tEq = Array<number>(NQ).fill(0);
+        js.forEach((j) => {
+          j.bsc_acum = bscAcum; j.bsc = bsc; delete (j as Partial<typeof j>)._a;
+          // su tiempo repartido en los trimestres (más al principio, cuando aprenden el simulador)
+          const w = Array.from({ length: NQ }, (_, k) => Math.max(0.15, 1.25 - k * 0.12 + gauss() * 0.3)), sw = w.reduce((a, b) => a + b, 0);
+          j.tiempos = w.map((x) => r2(((j.minutos ?? 0) * x) / sw));
+          let cum = 0;
+          j.historial = qv.map((v, k) => { cum += j.tiempos![k]; tEq[k] += j.tiempos![k]; return { t: k + 1, bsc_acum: acum[k], bsc: v, minutos: r2(cum), puntaje: null }; });
+        });
+        let cumEq = 0;
         equiposJuego.push({ clase_id: cId, equipo: t, trimestres: 6, bsc_acum: bscAcum, bsc, minutos: js.reduce((s, j) => s + (j.minutos ?? 0), 0),
+          tiempos: tEq.map(r2), historial: qv.map((v, k) => { cumEq += tEq[k]; return { t: k + 1, bsc_acum: acum[k], bsc: v, minutos: r2(cumEq), puntaje: null }; }),
           percentil: Math.round(Math.max(1, Math.min(99, 50 + aMed * 30 + gauss() * 10))), puntaje: Math.round((js.reduce((s, j) => s + (j.puntaje ?? 0), 0) / js.length) * 100) / 100 });
       });
     });
   });
-  return { version: 3, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
+  return { version: 4, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
 }
 
 export const DEMO_ACCOUNTS = [

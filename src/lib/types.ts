@@ -52,6 +52,9 @@ export interface ResultadoPatch { id: string; matricula?: string; carrera?: stri
 /** Ajustes de la plataforma: nombres visibles de roles y competencias */
 export type Ajustes = { roles?: unknown; competencias?: Record<string, string> } & Record<string, unknown>;
 
+/** Foto de un trimestre (cada informe igrades es el corte de un trimestre) */
+export interface PuntoTrimestre { t: number; bsc_acum: number | null; bsc: number | null; minutos: number | null; puntaje: number | null; }
+
 /** Desempeño en el juego de un jugador (informe «igrades»). El enlace con su estudiante se calcula al cargar. */
 export interface Desempeno {
   id: string;
@@ -66,6 +69,7 @@ export interface Desempeno {
   puntaje: number | null;          // puntuación calculada automáticamente
   puntaje_ajustado: number | null; // ajustada por el instructor
   tiempos?: number[] | null;       // minutos de cada trimestre (informe itimespent)
+  historial?: PuntoTrimestre[] | null; // un punto por trimestre importado
 }
 export interface DesempenoEquipo {
   clase_id: string;
@@ -75,6 +79,7 @@ export interface DesempenoEquipo {
   bsc: number | null;
   minutos: number | null;          // tiempo total del equipo
   tiempos?: number[] | null;
+  historial?: PuntoTrimestre[] | null;
   percentil: number | null;
   puntaje: number | null;
 }

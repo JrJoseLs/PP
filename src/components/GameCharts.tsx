@@ -1,7 +1,7 @@
 /* Gráficos del desempeño en el juego (informe igrades): tiempo invertido, Scorecard y puntajes. */
 import { useMemo, useState, type CSSProperties } from "react";
 import { fmt, displayName, type Row } from "../lib/metrics";
-import { fmtMin, median, pearson } from "../lib/game";
+import { fmtMin, median, nTrim, pearson, promedioQ, valoresQ, type SerieQ } from "../lib/game";
 import { SERIES_COLORS } from "../lib/groups";
 import type { DesempenoEquipo } from "../lib/types";
 import { Segmented } from "./ui";
@@ -229,7 +229,8 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
 /* ---------- Panel completo de la clase: dispersión + Equipos / Estudiantes con resaltado compartido ---------- */
 export function GamePanel({ rows, equipos, onPick }: { rows: Row[]; equipos: DesempenoEquipo[]; onPick(r: Row): void }) {
   const [focus, setFocus] = useState<string | null>(null);
-  const [vista, setVista] = useState<"equipos" | "estudiantes">(equipos.length ? "equipos" : "estudiantes");
+  const [vista, setVista] = useState<"equipos" | "estudiantes" | "trimestres">(equipos.length ? "equipos" : "estudiantes");
+  const nq = nTrim(equipos);
   const colors = useMemo(() => teamColors([...equipos.map((e) => e.equipo), ...rows.map(eqDe)]), [equipos, rows]);
   const conT = rows.filter((r) => r.juego?.minutos != null);
   return (
@@ -238,10 +239,12 @@ export function GamePanel({ rows, equipos, onPick }: { rows: Row[]; equipos: Des
       <div className="card-h game-tabs">
         <Segmented size="sm" value={vista} onChange={setVista} options={[
           ...(equipos.length ? [{ value: "equipos" as const, label: `Equipos · ${equipos.length}` }] : []),
-          { value: "estudiantes" as const, label: `Estudiantes · ${rows.length}` }]} />
+          { value: "estudiantes" as const, label: `Estudiantes · ${rows.length}` },
+          ...(equipos.length && nq > 0 ? [{ value: "trimestres" as const, label: `Trimestres · ${nq}` }] : [])]} />
         {focus && <span className="muted small">Resaltado: <b>{focus}</b> · <button type="button" className="link small" onClick={() => setFocus(null)}>quitar</button></span>}
       </div>
-      {vista === "equipos" && equipos.length > 0
+      {vista === "trimestres" && equipos.length > 0 ? <QuarterPanel equipos={equipos} colors={colors} focus={focus} onFocus={setFocus} />
+        : vista === "equipos" && equipos.length > 0
         ? <TeamBoard equipos={equipos} rows={rows} colors={colors} focus={focus} onFocus={setFocus} onPick={onPick} />
         : <StudentGameTable rows={rows} colors={colors} focus={focus} onPick={onPick} />}
     </>
@@ -274,6 +277,7 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
         {barra("Promedio de la clase", prom)}
       </div>
       {j.tiempos && j.tiempos.length > 0 && <TrimestreBars mine={j.tiempos} classRows={classRows} />}
+      <TeamEvolution row={row} classRows={classRows} />
       <div className="sg-kpis">
         <div><small>Puntaje del juego</small><b>{fmt(j.puntaje_ajustado ?? j.puntaje)}</b>{j.puntaje_ajustado !== null && j.puntaje !== null && j.puntaje_ajustado !== j.puntaje && <em>automático {fmt(j.puntaje)}</em>}</div>
         <div><small>Scorecard acumulado del equipo</small><b>{fmt(j.bsc_acum)}</b></div>
@@ -337,7 +341,152 @@ export function GameBars({ series }: { series: { name: string; color: string; ro
       {bloque("Tiempo promedio por estudiante", "min", fmtMin)}
       {bloque("Puntaje promedio del juego", "pun", (v) => fmt(v))}
       {bloque("Scorecard acumulado promedio", "bsc", (v) => fmt(v))}
+      <CompareQuarters series={series} />
       <p className="muted tiny">Solo cuentan los estudiantes con desempeño importado: {datos.map((d) => `${d.name} ${d.n}`).join(" · ")}.</p>
+    </div>
+  );
+}
+
+/* ---------- Evolución por trimestre ---------- */
+export interface QSerie { name: string; color: string; values: (number | null)[]; dashed?: boolean; dim?: boolean; bold?: boolean; }
+const Q_LABEL: Record<SerieQ, string> = { bsc: "Scorecard del trimestre", bsc_acum: "Scorecard acumulado", tiempo: "Tiempo del trimestre" };
+const qFmt = (k: SerieQ) => (v: number | null) => (k === "tiempo" ? fmtMin(v) : fmt(v));
+
+/** Líneas por trimestre (T1…Tn). Al pasar el cursor por un trimestre se listan los valores. */
+export function QuarterLines({ series, n, k, height = 260, onPick }: { series: QSerie[]; n: number; k: SerieQ; height?: number; onPick?(name: string): void }) {
+  const [hq, setHq] = useState<number | null>(null);
+  const f = qFmt(k);
+  const W = 640, H = height, L = 48, R = 18, T = 14, B = 30;
+  const all = series.flatMap((s) => s.values).filter((v): v is number => typeof v === "number");
+  if (n < 1 || !all.length) return <p className="muted small">Aún no hay datos por trimestre para esta medida.</p>;
+  const lo = Math.min(0, ...all), hi = Math.max(1, ...all) * 1.08;
+  const X = (i: number) => (n === 1 ? (L + W - R) / 2 : L + (i / (n - 1)) * (W - L - R));
+  const Y = (v: number) => H - B - ((v - lo) / (hi - lo)) * (H - B - T);
+  const ticks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) / 4) * i);
+  const path = (vals: (number | null)[]) => {
+    let d = "", pen = false;
+    vals.forEach((v, i) => { if (v === null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; pen = true; });
+    return d;
+  };
+  const orden = [...series].sort((a, b) => Number(!!b.dim) - Number(!!a.dim) || Number(!!a.bold) - Number(!!b.bold));
+  const tip = hq === null ? [] : series.filter((s) => !s.dim && s.values[hq] !== null).sort((a, b) => (b.values[hq] ?? 0) - (a.values[hq] ?? 0));
+  return (
+    <div className="qlines">
+      <div className="tscatter-plot">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={Q_LABEL[k] + " por trimestre"} onMouseLeave={() => setHq(null)}>
+          {ticks.map((v) => <g key={v}><line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} className="gl" /><text x={L - 8} y={Y(v) + 4} className="tk" textAnchor="end">{k === "tiempo" ? fmtMin(v) : Math.round(v)}</text></g>)}
+          {Array.from({ length: n }, (_, i) => (
+            <g key={i}>
+              {hq === i && <rect x={X(i) - 18} y={T} width={36} height={H - B - T} className="qhover" />}
+              <text x={X(i)} y={H - 8} className="tk" textAnchor="middle">T{i + 1}</text>
+              <rect x={X(i) - (W - L - R) / Math.max(1, n - 1) / 2} y={T} width={(W - L - R) / Math.max(1, n - 1)} height={H - B - T} fill="transparent" onMouseEnter={() => setHq(i)} />
+            </g>
+          ))}
+          {orden.map((s) => (
+            <g key={s.name} className={"qs" + (s.dim ? " dim" : "") + (s.bold ? " bold" : "")} onClick={() => onPick?.(s.name)} style={{ cursor: onPick ? "pointer" : undefined }}>
+              <path d={path(s.values)} stroke={s.color} strokeDasharray={s.dashed ? "5 4" : undefined} />
+              {s.values.map((v, i) => v !== null && <circle key={i} cx={X(i)} cy={Y(v)} r={s.bold ? 4.5 : 3} fill={s.color} />)}
+            </g>
+          ))}
+        </svg>
+        {hq !== null && tip.length > 0 && (
+          <div className="ts-tip q-tip" style={{ left: `${(X(hq) / W) * 100}%`, top: "8%" }}>
+            <b>Trimestre {hq + 1}</b>
+            {tip.slice(0, 8).map((s) => <span key={s.name}><i className="dot" style={{ background: s.color }} /> {s.name} <b>{f(s.values[hq])}</b></span>)}
+            {tip.length > 8 && <span>y {tip.length - 8} más…</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Vista «Trimestres» de la clase: líneas por equipo + tabla de cambios entre trimestres */
+export function QuarterPanel({ equipos, colors, focus, onFocus }: {
+  equipos: DesempenoEquipo[]; colors: Map<string, string>; focus: string | null; onFocus(e: string | null): void;
+}) {
+  const n = nTrim(equipos);
+  const disponibles = (["bsc", "bsc_acum", "tiempo"] as SerieQ[]).filter((k) => equipos.some((e) => valoresQ(e, k, n).filter((v) => v !== null).length > 0));
+  const [k, setK] = useState<SerieQ>(disponibles[0] ?? "bsc");
+  const f = qFmt(k);
+  const series = equipos.map((e) => ({ name: e.equipo, color: colors.get(e.equipo) ?? "#888", values: valoresQ(e, k, n),
+    dim: !!focus && !sameEq(e.equipo, focus), bold: !!focus && sameEq(e.equipo, focus) }));
+  const prom = promedioQ(series.map((s) => s.values), n);
+  const conPuntos = series.filter((s) => s.values.some((v) => v !== null));
+  const ultimo = (v: (number | null)[]) => { for (let i = v.length - 1; i >= 0; i--) if (v[i] !== null) return i; return -1; };
+  const filas = [...conPuntos].sort((a, b) => (b.values[ultimo(b.values)] ?? -1) - (a.values[ultimo(a.values)] ?? -1));
+  // mayor mejora entre el primer y el último trimestre con dato
+  const cambio = (v: (number | null)[]) => { const xs = v.map((x, i) => [x, i] as const).filter(([x]) => x !== null); return xs.length > 1 ? xs[xs.length - 1][0]! - xs[0][0]! : null; };
+  const mejora = [...conPuntos].map((s) => ({ s, d: cambio(s.values) })).filter((x) => x.d !== null).sort((a, b) => b.d! - a.d!);
+  const pocos = n < 2 || conPuntos.every((s) => s.values.filter((v) => v !== null).length < 2);
+  if (!disponibles.length) return <p className="muted small">Este informe trae un solo corte. Sube los igrades de otros trimestres de este juego (…-q1, …-q2…) a esta misma clase y aquí verás cómo evoluciona cada equipo.</p>;
+  return (
+    <div className="qpanel">
+      <div className="card-h">
+        <Segmented size="sm" value={k} onChange={setK} options={disponibles.map((x) => ({ value: x, label: x === "bsc" ? "Scorecard del trimestre" : x === "bsc_acum" ? "Acumulado" : "Tiempo" }))} />
+        {mejora.length > 0 && <span className="muted small">Mayor mejora: <b>{mejora[0].s.name}</b> ({mejora[0].d! >= 0 ? "+" : ""}{f(mejora[0].d)})</span>}
+      </div>
+      <QuarterLines n={n} k={k} onPick={(name) => onFocus(focus && sameEq(focus, name) ? null : name)}
+        series={[...series, { name: "Promedio de la clase", color: "var(--text-2)", values: prom, dashed: true, bold: !focus }]} />
+      {pocos && <p className="note small">Por ahora solo hay un trimestre con este dato. Cada igrades nuevo de este juego que subas a esta clase añade un punto a las líneas.</p>}
+      <div className="table-scroll sgt-scroll qtable-wrap">
+        <table className="etable qtable">
+          <thead><tr><th>Equipo</th>{Array.from({ length: n }, (_, i) => <th key={i} className="num">T{i + 1}</th>)}<th className="num">Cambio</th></tr></thead>
+          <tbody>
+            {[{ name: "Promedio de la clase", color: "var(--text-2)", values: prom, dim: false, bold: false }, ...filas].map((s, idx) => {
+              const d = cambio(s.values);
+              return (
+                <tr key={s.name} className={(idx === 0 ? "avg-row" : "") + (s.dim ? " faded" : "") + (s.bold ? " on" : "")} onClick={() => idx > 0 && onFocus(focus && sameEq(focus, s.name) ? null : s.name)}>
+                  <td><span className="eq-cell"><span className="dot" style={{ background: s.color }} /><b>{s.name}</b></span></td>
+                  {s.values.map((v, i) => {
+                    const p = i > 0 ? s.values[i - 1] : null;
+                    const up = v !== null && p !== null ? v - p : null;
+                    return <td key={i} className="num">{f(v)}{up !== null && Math.abs(up) > 0.05 && <small className={up > 0 ? "pos" : "neg"}>{up > 0 ? " ▲" : " ▼"}</small>}</td>;
+                  })}
+                  <td className="num">{d === null ? "—" : <b className={d >= 0 ? "pos" : "neg"}>{d >= 0 ? "+" : ""}{f(d)}</b>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted tiny">{Q_LABEL[k]} de cada equipo en cada trimestre. ▲/▼ = sube o baja frente al trimestre anterior; «Cambio» = del primer al último trimestre con dato. Toca una línea o una fila para resaltar el equipo.</p>
+    </div>
+  );
+}
+
+/** Ficha del estudiante: cómo le fue a su equipo trimestre a trimestre frente a la clase */
+function TeamEvolution({ row, classRows }: { row: Row; classRows: Row[] }) {
+  const j = row.juego!;
+  const n = nTrim([j]);
+  const mine = valoresQ(j, "bsc", n);
+  if (mine.filter((v) => v !== null).length < 2) return null;
+  const prom = promedioQ(classRows.filter((r) => r.juego).map((r) => valoresQ(r.juego!, "bsc", n)), n);
+  const last = mine.reduce<number | null>((a, v) => (v !== null ? v : a), null), first = mine.find((v) => v !== null) ?? null;
+  const d = last !== null && first !== null ? last - first : null;
+  return (
+    <div className="sg-trim">
+      <h4 className="sub-h">Scorecard de tu equipo por trimestre</h4>
+      {d !== null && <p className="small">Del primer al último trimestre tu equipo {Math.abs(d) < 0.5 ? "se mantuvo estable" : d > 0 ? <>mejoró <b className="pos">+{fmt(d)}</b> puntos</> : <>bajó <b className="neg">{fmt(d)}</b> puntos</>}.</p>}
+      <QuarterLines n={n} k="bsc" height={200} series={[
+        { name: j.equipo || "Tu equipo", color: "var(--accent)", values: mine, bold: true },
+        { name: "Promedio de la clase", color: "var(--text-2)", values: prom, dashed: true }]} />
+    </div>
+  );
+}
+
+/** Comparar: Scorecard promedio por trimestre de cada serie */
+function CompareQuarters({ series }: { series: { name: string; color: string; rows: Row[] }[] }) {
+  const js = series.flatMap((s) => s.rows.map((r) => r.juego).filter((x): x is NonNullable<typeof x> => !!x));
+  const n = nTrim(js);
+  const [k, setK] = useState<SerieQ>("bsc");
+  const qs = series.map((s) => ({ name: s.name, color: s.color, values: promedioQ(s.rows.filter((r) => r.juego).map((r) => valoresQ(r.juego!, k, n)), n) }));
+  if (n < 2 || !qs.some((q) => q.values.filter((v) => v !== null).length >= 2)) return null;
+  return (
+    <div className="gb-block">
+      <div className="card-h"><h4 className="sub-h">Por trimestre</h4>
+        <Segmented size="sm" value={k} onChange={setK} options={[{ value: "bsc", label: "Scorecard" }, { value: "bsc_acum", label: "Acumulado" }, { value: "tiempo", label: "Tiempo" }]} /></div>
+      <QuarterLines n={n} k={k} height={230} series={qs} />
     </div>
   );
 }

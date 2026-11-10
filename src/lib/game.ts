@@ -3,7 +3,7 @@
           «Desempeño por Jugadores» (nombre, correo, empresa, tiempo propio, puntajes).
    Los encabezados se reconocen por palabras clave (español o inglés), así que tolera
    cambios menores de redacción entre versiones del juego. */
-import type { Desempeno, DesempenoEquipo, Resultado } from "./types";
+import type { Desempeno, DesempenoEquipo, PuntoTrimestre, Resultado } from "./types";
 import { Directory } from "./directory";
 import { normText } from "./metrics";
 import { isExample } from "./templates";
@@ -64,7 +64,11 @@ export function parseIgrades(book: Record<string, Rows>): Igrades | null {
       // trimestres jugados: el informe de tiempo no los trae; se cuentan hasta el último con tiempo
       const jugados = tiempos ? tiempos.reduce((a, v, k) => (v > 0 ? k + 1 : a), 0) : null;
       const base = { equipo: str(get(r, "equipo")), trimestres: num(get(r, "trimestres")) ?? jugados, bsc_acum: num(get(r, "bsc_acum")), bsc: num(get(r, "bsc")),
-        minutos: num(get(r, "minutos")) ?? (tiempos ? tiempos.reduce((a, b) => a + b, 0) : null), puntaje: num(get(r, "puntaje")), tiempos };
+        minutos: num(get(r, "minutos")) ?? (tiempos ? tiempos.reduce((a, b) => a + b, 0) : null), puntaje: num(get(r, "puntaje")), tiempos,
+        historial: null as PuntoTrimestre[] | null };
+      // cada igrades es el corte de un trimestre («Resultados del Trimestre» = 4): se guarda como un punto del historial
+      if (!tiempos && base.trimestres && (base.bsc !== null || base.bsc_acum !== null))
+        base.historial = [{ t: base.trimestres, bsc_acum: base.bsc_acum, bsc: base.bsc, minutos: base.minutos, puntaje: base.puntaje }];
       if (jugadores) {
         const nombre = [str(get(r, "nombre")), str(get(r, "apellido")).replace(/^\.$/, "")].filter(Boolean).join(" ");
         if (!nombre || isExample(nombre)) continue;
@@ -79,7 +83,7 @@ export function parseIgrades(book: Record<string, Rows>): Igrades | null {
   if (!out.equipos.length) {
     const map = new Map<string, Equipo>();
     out.jugadores.forEach((j) => {
-      const e = map.get(j.equipo) ?? { equipo: j.equipo, trimestres: j.trimestres, bsc_acum: j.bsc_acum, bsc: j.bsc, minutos: 0, percentil: null, puntaje: j.puntaje, tiempos: null };
+      const e = map.get(j.equipo) ?? { equipo: j.equipo, trimestres: j.trimestres, bsc_acum: j.bsc_acum, bsc: j.bsc, minutos: 0, percentil: null, puntaje: j.puntaje, tiempos: null, historial: j.historial ?? null };
       e.minutos = (e.minutos ?? 0) + (j.minutos ?? 0);
       if (j.tiempos) e.tiempos = j.tiempos.map((v, k) => v + (e.tiempos?.[k] ?? 0));
       map.set(j.equipo, e);
@@ -122,15 +126,29 @@ export const gameQuarter = (fileName: string) => Number(fileName.match(/-q(\d+)/
 /** Nombre de la clase que se crea desde el juego: el mismo que tendrá su informe de competencias, para que este luego la reemplace */
 export const claseNameFromGame = (fileName: string) => { const c = gameCode(fileName); return c ? `Clase ${c}` : fileName.replace(/\.(xlsx|xls|csv)$/i, ""); };
 
-/** Une dos informes del mismo juego (p. ej. igrades + itimespent). Lo de `nuevo` manda cuando trae dato. */
+type ConHist = { trimestres: number | null; historial?: PuntoTrimestre[] | null; tiempos?: number[] | null };
+/** Último trimestre que refleja un registro */
+const ultimoT = (x: ConHist) => Math.max(x.trimestres ?? 0, ...(x.historial ?? []).map((p) => p.t));
+/** Une historiales por trimestre; si un trimestre se repite, manda `b` */
+function unirHist(a?: PuntoTrimestre[] | null, b?: PuntoTrimestre[] | null) {
+  const m = new Map<number, PuntoTrimestre>();
+  [...(a ?? []), ...(b ?? [])].forEach((p) => m.set(p.t, p));
+  return m.size ? [...m.values()].sort((x, y) => x.t - y.t) : null;
+}
+
+/** Une dos informes del mismo juego (igrades + itimespent, o trimestres distintos).
+    Los datos actuales salen del informe del trimestre más reciente; el historial guarda todos. */
 export function mergeIgrades(viejo: Igrades, nuevo: Igrades): Igrades {
   const keyJ = (j: Jugador) => j.email || normText(j.nombre);
-  const mezcla = <T extends object>(a: T, b: T): T => {
-    const out = { ...a } as Record<string, unknown>;
-    Object.entries(b).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== "") out[k] = v; });
+  const mezcla = <T extends ConHist>(a: T, b: T): T => {
+    const [antes, despues] = ultimoT(a) > ultimoT(b) ? [b, a] : [a, b];
+    const out = { ...antes } as Record<string, unknown>;
+    Object.entries(despues as Record<string, unknown>).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== "") out[k] = v; });
+    out.historial = unirHist(a.historial, b.historial);
+    out.tiempos = (b.tiempos?.length ?? 0) >= (a.tiempos?.length ?? 0) ? b.tiempos ?? a.tiempos ?? null : a.tiempos;
     return out as T;
   };
-  const une = <T extends object>(xs: T[], ys: T[], key: (x: T) => string) => {
+  const une = <T extends ConHist>(xs: T[], ys: T[], key: (x: T) => string) => {
     const m = new Map(xs.map((x) => [key(x), x] as const));
     ys.forEach((y) => { const x = m.get(key(y)); m.set(key(y), x ? mezcla(x, y) : y); });
     return [...m.values()];
@@ -138,9 +156,43 @@ export function mergeIgrades(viejo: Igrades, nuevo: Igrades): Igrades {
   return { jugadores: une(viejo.jugadores, nuevo.jugadores, keyJ), equipos: une(viejo.equipos, nuevo.equipos, (e) => normText(e.equipo)) };
 }
 
+/** ¿Son del mismo juego? (al menos la mitad de los jugadores nuevos ya estaban) */
+export function mismoJuego(antes: Pick<Igrades, "jugadores">, nuevo: Pick<Igrades, "jugadores">) {
+  const k = (j: { email: string; nombre: string }) => j.email || normText(j.nombre);
+  const set = new Set(antes.jugadores.map(k));
+  return nuevo.jugadores.length > 0 && nuevo.jugadores.filter((j) => set.has(k(j))).length >= nuevo.jugadores.length / 2;
+}
+/** Trimestres presentes en un conjunto de registros */
+export const trimestresDe = (xs: ConHist[]) => [...new Set(xs.flatMap((x) => (x.historial ?? []).map((p) => p.t)))].sort((a, b) => a - b);
+
+/* ---------- series por trimestre (para los gráficos) ---------- */
+export type SerieQ = "bsc" | "bsc_acum" | "tiempo";
+/** Valor de un registro en cada trimestre 1…n */
+export function valoresQ(x: ConHist & { minutos?: number | null }, k: SerieQ, n: number): (number | null)[] {
+  return Array.from({ length: n }, (_, i) => {
+    const t = i + 1;
+    if (k === "tiempo") {
+      if (x.tiempos?.length) return i < x.tiempos.length ? x.tiempos[i] : null;
+      // sin informe de tiempo: diferencia entre los totales acumulados de dos cortes seguidos
+      const p = x.historial?.find((h) => h.t === t), q = x.historial?.find((h) => h.t === t - 1);
+      return p?.minutos != null ? (t === 1 ? p.minutos : q?.minutos != null ? Math.max(0, p.minutos - q.minutos) : null) : null;
+    }
+    const p = x.historial?.find((h) => h.t === t);
+    return p ? p[k] : null;
+  });
+}
+/** Número de trimestres a graficar */
+export const nTrim = (xs: (ConHist)[]) => Math.max(0, ...xs.map((x) => Math.max(ultimoT(x), x.tiempos?.length ?? 0)));
+/** Promedio por trimestre de varias series */
+export const promedioQ = (series: (number | null)[][], n: number) => Array.from({ length: n }, (_, i) => {
+  const v = series.map((s) => s[i]).filter((x): x is number => typeof x === "number");
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+});
+
 /* ---------- utilidades ---------- */
-export function fmtMin(m: number | null | undefined) {
+export function fmtMin(m: number | null | undefined): string {
   if (m === null || m === undefined || !Number.isFinite(m)) return "—";
+  if (m < 0) return "−" + fmtMin(-m);
   const t = Math.round(m);
   const h = Math.floor(t / 60), mm = t % 60;
   return h ? `${h} h${mm ? ` ${mm} min` : ""}` : `${mm} min`;

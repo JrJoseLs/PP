@@ -11,7 +11,7 @@ import { Avatar, Icon, Segmented } from "../components/ui";
 import { Radar } from "../components/Radar";
 import { Ring } from "../components/Charts";
 import { guessGroup, parseReport, readBook } from "../lib/parse";
-import { parseIgrades } from "../lib/game";
+import { mergeIgrades, mismoJuego, parseIgrades } from "../lib/game";
 import { GameCard, mergeGameJobs, newGameJob, suggestTarget, type GameJob } from "../components/GameImport";
 import { generalIndex, mean, fmt, normText, plural, displayName } from "../lib/metrics";
 import { downloadDirectory, downloadReportTemplate, downloadRosterTemplate } from "../lib/templates";
@@ -118,7 +118,7 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
   /** Informes igrades (desempeño en el juego) pendientes */
   games: GameJob[]; setGames: React.Dispatch<React.SetStateAction<GameJob[]>>;
 }) {
-  const { api, snap, toast, refresh, rowsByClase } = useApp();
+  const { api, snap, toast, refresh, rowsByClase, juegoByClase } = useApp();
   const go = useNavigate();
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -196,7 +196,11 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
       metrics: [], archivo: g.files.join(", "), estudiantes, decanos: g.nueva.decanos });
   };
   const saveGame = async (g: GameJob, claseId: string) => {
-    await api.saveDesempeno(claseId, g.data.jugadores, g.data.equipos);
+    // si la clase ya tiene otro trimestre del mismo juego, se suma al historial en vez de reemplazarlo
+    const prev = juegoByClase.get(claseId);
+    const antes = prev && { jugadores: prev.jugadores.map(({ id: _i, clase_id: _c, ...j }) => j), equipos: prev.equipos.map(({ clase_id: _c, ...e }) => e) };
+    const data = antes && mismoJuego(antes, g.data) ? mergeIgrades(antes, g.data) : g.data;
+    await api.saveDesempeno(claseId, data.jugadores, data.equipos);
     setGames((gs) => gs.map((x) => (x.key === g.key ? { ...x, saved: true, target: "clase:" + claseId } : x)));
   };
 

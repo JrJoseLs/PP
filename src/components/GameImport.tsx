@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../data/store";
 import { Avatar, Icon } from "./ui";
-import { claseNameFromGame, fmtMin, gameCode, gameQuarter, linkJugadores, mergeIgrades, scoreClase, type Igrades } from "../lib/game";
+import { claseNameFromGame, fmtMin, gameCode, gameQuarter, linkJugadores, mergeIgrades, mismoJuego, scoreClase, trimestresDe, type Igrades } from "../lib/game";
 import { D } from "../lib/labels";
 import { displayName, fmt, plural } from "../lib/metrics";
 import type { Resultado } from "../lib/types";
@@ -59,7 +59,15 @@ export function GameCard({ job, drafts, onTarget, onNueva, onSave, onClose }: {
   const ok = esNueva ? jugadores.length : links.filter((k) => k >= 0).length;
   const sin = esNueva ? [] : jugadores.filter((_, i) => links[i] < 0);
   const total = jugadores.reduce((a, j) => a + (j.minutos ?? 0), 0);
-  const yaTiene = job.target.startsWith("clase:") && (juegoByClase.get(job.target.slice(6))?.jugadores.length ?? 0) > 0;
+  const prev = job.target.startsWith("clase:") ? juegoByClase.get(job.target.slice(6)) : undefined;
+  const yaTiene = (prev?.jugadores.length ?? 0) > 0;
+  const suma = yaTiene && mismoJuego(prev!, job.data);
+  const tPrev = suma ? trimestresDe([...prev!.equipos, ...prev!.jugadores]) : [];
+  const tNuevo = trimestresDe([...equipos, ...jugadores]);
+  // «T1, T2, T3, T5» → «T1–T3, T5»
+  const lista = (ts: number[]) => ts.reduce<number[][]>((g, t) => { const u = g[g.length - 1]; if (u && t === u[u.length - 1] + 1) u.push(t); else g.push([t]); return g; }, [])
+    .map((g) => (g.length > 1 ? `T${g[0]}–T${g[g.length - 1]}` : "T" + g[0])).join(", ");
+  const corte = tNuevo.length ? Math.max(...tNuevo) : job.q;
   const top = [...equipos].sort((a, b) => (b.bsc_acum ?? -1) - (a.bsc_acum ?? -1));
   const conTrim = jugadores.some((j) => j.tiempos?.length);
   const decanos = snap.profiles.filter((p) => p.rol === "decano" && p.activo);
@@ -75,6 +83,7 @@ export function GameCard({ job, drafts, onTarget, onNueva, onSave, onClose }: {
         <span className="ms info"><b>{jugadores.length}</b> jugadores</span>
         <span className="ms"><b>{equipos.length}</b> equipos</span>
         <span className="ms"><b>{fmtMin(total)}</b> de juego en total</span>
+        {corte > 0 && <span className="ms" title={tNuevo.length > 1 ? `Algunos equipos tienen su último resultado en: ${lista(tNuevo)}` : undefined}>corte del <b>trimestre {corte}</b></span>}
         {conTrim && <span className="ms"><Icon name="check" size={13} /> tiempo por trimestre</span>}
         {job.target && !esNueva && <span className={"ms " + (ok === jugadores.length ? "good" : "warn")}><b>{ok}</b> de {jugadores.length} enlazados con sus estudiantes</span>}
       </div>
@@ -105,7 +114,9 @@ export function GameCard({ job, drafts, onTarget, onNueva, onSave, onClose }: {
           <p className="note small">Se crea la clase con sus {plural(jugadores.length, "jugador", "jugadores")} como estudiantes, todavía sin competencias. Cuando subas su informe de competencias (<code>icompetencyreport-{job.code ?? "…"}</code>), elige «Reemplazar datos de» esta clase y se completará la araña.</p>
         </div>
       )}
-      {yaTiene && !job.saved && <p className="note small">Esta clase ya tiene desempeño cargado: se reemplazará por el de este archivo.</p>}
+      {yaTiene && !job.saved && (suma
+        ? <p className="note small">Esta clase ya tiene {tPrev.length ? `los trimestres ${lista(tPrev)}` : "desempeño"} de este juego: {corte ? `se añade el trimestre ${corte}` : "se actualiza"} y se conserva el historial para comparar trimestres.</p>
+        : <p className="note small">Esta clase ya tiene desempeño de otro juego: se reemplazará por el de este archivo.</p>)}
       {sin.length > 0 && job.target && (
         <p className="small muted">{sin.length === jugadores.length ? "Ninguno de estos jugadores está en la clase elegida: ¿es otra clase? Prueba «Crear clase nueva». " : ""}
           Sin estudiante en la clase: {sin.slice(0, 6).map((j) => displayName(j.nombre)).join(", ")}{sin.length > 6 ? ` y ${sin.length - 6} más` : ""}. Se guardan igual; aparecerán al subir su informe de competencias.</p>
