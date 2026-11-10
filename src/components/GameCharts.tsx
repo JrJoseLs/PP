@@ -32,7 +32,8 @@ function perfiles(rows: Row[]) {
 export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: {
   rows: Row[]; onPick(r: Row): void; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void;
 }) {
-  const [eje, setEje] = useState<EjeY>("indice");
+  // sin informe de competencias todavía, se empieza por lo que sí hay
+  const [eje, setEje] = useState<EjeY>(() => rows.some((r) => r.indice !== null) ? "indice" : rows.some((r) => r.juego?.bsc_acum != null) ? "bsc_acum" : "puntaje");
   const [hover, setHover] = useState<Row | null>(null);
   const pts = rows.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined && EJE[eje].get(r) !== null);
   const own = useMemo(() => teamColors(rows.map(eqDe)), [rows]);
@@ -272,12 +273,45 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
         {barra(`Promedio de tu equipo (${j.equipo || "—"})`, promEq)}
         {barra("Promedio de la clase", prom)}
       </div>
+      {j.tiempos && j.tiempos.length > 0 && <TrimestreBars mine={j.tiempos} classRows={classRows} />}
       <div className="sg-kpis">
         <div><small>Puntaje del juego</small><b>{fmt(j.puntaje_ajustado ?? j.puntaje)}</b>{j.puntaje_ajustado !== null && j.puntaje !== null && j.puntaje_ajustado !== j.puntaje && <em>automático {fmt(j.puntaje)}</em>}</div>
         <div><small>Scorecard acumulado del equipo</small><b>{fmt(j.bsc_acum)}</b></div>
         <div><small>Scorecard del último trimestre</small><b>{fmt(j.bsc)}</b>{j.bsc_acum !== null && j.bsc !== null && <em className={j.bsc >= j.bsc_acum ? "pos" : "neg"}>{j.bsc >= j.bsc_acum ? "▲ mejorando" : "▼ por debajo del acumulado"}</em>}</div>
         <div><small>Trimestres jugados</small><b>{j.trimestres ?? "—"}</b></div>
       </div>
+    </div>
+  );
+}
+
+/* Tiempo de cada trimestre: el del estudiante frente al promedio de la clase, y lo acumulado */
+function TrimestreBars({ mine, classRows }: { mine: number[]; classRows: Row[] }) {
+  const n = mine.length;
+  const prom = Array.from({ length: n }, (_, k) => {
+    const v = classRows.map((r) => r.juego?.tiempos?.[k]).filter((x): x is number => typeof x === "number");
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  });
+  const jugados = Math.max(...mine.map((v, k) => (v > 0 || (prom[k] ?? 0) > 0 ? k + 1 : 0)));
+  const max = Math.max(1, ...mine, ...prom.map((v) => v ?? 0));
+  let acum = 0;
+  return (
+    <div className="sg-trim">
+      <h4 className="sub-h">Tiempo por trimestre</h4>
+      <div className="trim-cols">
+        {mine.slice(0, Math.max(1, jugados)).map((v, k) => {
+          acum += v;
+          return (
+            <div className="trim" key={k} title={`Trimestre ${k + 1}: tú ${fmtMin(v)} · promedio de la clase ${fmtMin(prom[k])}`}>
+              <div className="trim-bars">
+                <i className="me" style={{ height: (v / max) * 100 + "%" }} />
+                <i style={{ height: ((prom[k] ?? 0) / max) * 100 + "%" }} />
+              </div>
+              <b>{fmtMin(v)}</b><small>T{k + 1} · acum. {fmtMin(acum)}</small>
+            </div>
+          );
+        })}
+      </div>
+      <p className="muted tiny"><span className="dot" style={{ background: "var(--accent)" }} /> Tú · <span className="dot" style={{ background: "var(--fill-3)" }} /> promedio de la clase</p>
     </div>
   );
 }

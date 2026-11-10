@@ -12,7 +12,7 @@ import { Radar } from "../components/Radar";
 import { Ring } from "../components/Charts";
 import { guessGroup, parseReport, readBook } from "../lib/parse";
 import { parseIgrades } from "../lib/game";
-import { GameCard, suggestTarget, type GameJob } from "../components/GameImport";
+import { GameCard, mergeGameJobs, newGameJob, suggestTarget, type GameJob } from "../components/GameImport";
 import { generalIndex, mean, fmt, normText, plural, displayName } from "../lib/metrics";
 import { downloadDirectory, downloadReportTemplate, downloadRosterTemplate } from "../lib/templates";
 import { Directory, FIELD_LABEL, completeness, detectFile, extractPeople, mergePeople, syncPatches, type Field, type Found, type MergeResult } from "../lib/directory";
@@ -135,7 +135,7 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
       try {
         const book = await readBook(file);
         const ig = parseIgrades(book);   // informe igrades: desempeño en el juego (tiempo, Scorecard, puntajes)
-        if (ig) nuevosJuegos.push({ key: file.name + Date.now(), fileName: file.name, data: ig, target: "" });
+        if (ig) nuevosJuegos.push(newGameJob(file.name, ig));
         else parsed.push({ file, rows: Object.values(book)[0] ?? [] });
       } catch (e) { toast(`No pude leer "${file.name}": ${friendlyError(e)}`, "error"); }
     }
@@ -178,10 +178,22 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
       // se sugiere la clase con más equipos y estudiantes en común (también las nuevas de este lote)
       const cls = snap.clases.map((c) => ({ id: c.id, rows: (rowsByClase.get(c.id) ?? []).map((r) => r.r) }));
       const drs = [...drafts, ...nd].map((d) => ({ key: d.key, raw: d.raw }));
-      setGames((g) => [...g, ...nuevosJuegos.map((j) => ({ ...j, target: suggestTarget(j.data, cls, drs) }))]);
-      toast(`Desempeño del juego: ${plural(nuevosJuegos.reduce((a, j) => a + j.data.jugadores.length, 0), "jugador", "jugadores")}. Revisa a qué clase pertenece.`);
+      // los informes del mismo juego (igrades + itimespent, o varios trimestres) se unen en una sola tarjeta
+      const { jobs: unidos, unidos: n } = mergeGameJobs([...games, ...nuevosJuegos]);
+      setGames(unidos.map((j) => (j.target || j.saved ? j : { ...j, target: suggestTarget(j.data, cls, drs) })));
+      toast(`Desempeño del juego: ${plural(unidos.filter((j) => !games.includes(j)).reduce((a, j) => a + j.data.jugadores.length, 0), "jugador", "jugadores")}${n ? ` · ${plural(n, "informe unido", "informes unidos")} al de su mismo juego` : ""}. Revisa a qué clase pertenece.`);
     }
     setBusy(null);
+  };
+  /** Crea la clase a partir de los jugadores del juego (sin competencias todavía) */
+  const createFromGame = async (g: GameJob) => {
+    const porEmail = new Map(roster.filter((p) => p.email).map((p) => [p.email!.toLowerCase(), p]));
+    const estudiantes = g.data.jugadores.map((j) => {
+      const p = j.email ? porEmail.get(j.email) : undefined;   // el directorio completa matrícula y carrera si conoce el correo
+      return { nombre: j.nombre, matricula: p?.matricula ?? "", carrera: p?.carrera ?? "", grupo: g.nueva.grupo || p?.grupo || "", equipo: j.equipo, valores: [] as number[] };
+    });
+    return api.importClase({ nombre: g.nueva.nombre.trim(), grupo: g.nueva.grupo, periodo: g.nueva.periodo, color: PALETTE[snap.clases.length % PALETTE.length],
+      metrics: [], archivo: g.files.join(", "), estudiantes, decanos: g.nueva.decanos });
   };
   const saveGame = async (g: GameJob, claseId: string) => {
     await api.saveDesempeno(claseId, g.data.jugadores, g.data.equipos);
@@ -263,7 +275,15 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
 
       {games.map((g) => <GameCard key={g.key} job={g} drafts={drafts.map((d) => ({ key: d.key, nombre: d.nombre, raw: d.raw }))}
         onTarget={(t) => setGames((gs) => gs.map((x) => (x.key === g.key ? { ...x, target: t } : x)))}
-        onSave={async () => { try { await saveGame(g, g.target.slice(6)); await refresh(); toast("Desempeño guardado"); } catch (e) { toast(friendlyError(e), "error"); } }}
+        onNueva={(p) => setGames((gs) => gs.map((x) => (x.key === g.key ? { ...x, nueva: { ...x.nueva, ...p } } : x)))}
+        onSave={async () => {
+          try {
+            const nueva = g.target === "nueva";
+            await saveGame(g, nueva ? await createFromGame(g) : g.target.slice(6));
+            await refresh();
+            toast(nueva ? `Clase «${g.nueva.nombre.trim()}» creada con su desempeño` : "Desempeño guardado");
+          } catch (e) { toast(friendlyError(e), "error"); }
+        }}
         onClose={() => setGames((gs) => gs.filter((x) => x.key !== g.key))} />)}
 
       {jobs.map((j, idx) => <ListCard key={j.key} job={j} last={idx === jobs.length - 1} onRedo={(p) => redo(j, p)} onUndo={() => undo(j)} onClose={() => setJobs((js) => js.filter((x) => x.key !== j.key))} />)}

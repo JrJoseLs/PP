@@ -13,10 +13,12 @@ export type Jugador = Omit<Desempeno, "id" | "clase_id">;
 export type Equipo = Omit<DesempenoEquipo, "clase_id">;
 export interface Igrades { jugadores: Jugador[]; equipos: Equipo[]; }
 
-type Col = "nombre" | "apellido" | "email" | "equipo" | "trimestres" | "bsc_acum" | "bsc" | "minutos" | "percentil" | "puntaje" | "puntaje_ajustado";
+type Col = "nombre" | "apellido" | "email" | "equipo" | "trimestres" | "bsc_acum" | "bsc" | "minutos" | "percentil" | "puntaje" | "puntaje_ajustado" | "tq";
 function colOf(h: string): Col | null {
   const n = normText(h);
   if (!n) return null;
+  // «Trimestre 1», «Trimestre 2»…: tiempo de cada trimestre (informe itimespent)
+  if (/^(TRIMESTRE|QUARTER|Q) ?\d+$/.test(n)) return "tq";
   if (/GASTADO|TIME SPENT|TIEMPO/.test(n)) return "minutos";
   if (/INSTRUCTOR/.test(n)) return "puntaje_ajustado";
   if (/AUTOMATIC/.test(n)) return "puntaje";
@@ -55,9 +57,14 @@ export function parseIgrades(book: Record<string, Rows>): Igrades | null {
     if (!h || !h.cols.some((c) => c === "minutos" || c === "bsc_acum" || c === "puntaje")) continue;
     const get = (r: unknown[], c: Col) => { const k = h.cols.indexOf(c); return k >= 0 ? r[k] : undefined; };
     const jugadores = h.cols.includes("nombre") || h.cols.includes("email");
+    const tqs = h.cols.flatMap((c, k) => (c === "tq" ? [k] : []));
     for (const r of rows.slice(h.i + 1)) {
       if (!r || !str(get(r, "equipo"))) continue;
-      const base = { equipo: str(get(r, "equipo")), trimestres: num(get(r, "trimestres")), bsc_acum: num(get(r, "bsc_acum")), bsc: num(get(r, "bsc")), minutos: num(get(r, "minutos")), puntaje: num(get(r, "puntaje")) };
+      const tiempos = tqs.length ? tqs.map((k) => num(r[k]) ?? 0) : null;
+      // trimestres jugados: el informe de tiempo no los trae; se cuentan hasta el último con tiempo
+      const jugados = tiempos ? tiempos.reduce((a, v, k) => (v > 0 ? k + 1 : a), 0) : null;
+      const base = { equipo: str(get(r, "equipo")), trimestres: num(get(r, "trimestres")) ?? jugados, bsc_acum: num(get(r, "bsc_acum")), bsc: num(get(r, "bsc")),
+        minutos: num(get(r, "minutos")) ?? (tiempos ? tiempos.reduce((a, b) => a + b, 0) : null), puntaje: num(get(r, "puntaje")), tiempos };
       if (jugadores) {
         const nombre = [str(get(r, "nombre")), str(get(r, "apellido")).replace(/^\.$/, "")].filter(Boolean).join(" ");
         if (!nombre || isExample(nombre)) continue;
@@ -72,8 +79,9 @@ export function parseIgrades(book: Record<string, Rows>): Igrades | null {
   if (!out.equipos.length) {
     const map = new Map<string, Equipo>();
     out.jugadores.forEach((j) => {
-      const e = map.get(j.equipo) ?? { equipo: j.equipo, trimestres: j.trimestres, bsc_acum: j.bsc_acum, bsc: j.bsc, minutos: 0, percentil: null, puntaje: j.puntaje };
+      const e = map.get(j.equipo) ?? { equipo: j.equipo, trimestres: j.trimestres, bsc_acum: j.bsc_acum, bsc: j.bsc, minutos: 0, percentil: null, puntaje: j.puntaje, tiempos: null };
       e.minutos = (e.minutos ?? 0) + (j.minutos ?? 0);
+      if (j.tiempos) e.tiempos = j.tiempos.map((v, k) => v + (e.tiempos?.[k] ?? 0));
       map.set(j.equipo, e);
     });
     out.equipos = [...map.values()];
@@ -104,6 +112,30 @@ export function scoreClase(g: Igrades, resultados: Pick<Resultado, "nombre" | "m
   const comunes = g.equipos.filter((e) => eqs.has(normText(e.equipo))).length;
   const enlazados = linkJugadores(g.jugadores, resultados).filter((k) => k >= 0).length;
   return { comunes, enlazados, score: enlazados * 2 + comunes * 3 };
+}
+
+/* ---------- varios informes del mismo juego ---------- */
+/** Código del juego en el nombre del archivo: «igrades-29740-00005-73609-q4.xlsx» → «29740-00005-73609» */
+export const gameCode = (fileName: string) => fileName.match(/(\d{4,6}-\d{4,6}(?:-\d{4,6})?)/)?.[1] ?? null;
+/** Trimestre del informe («…-q5.xlsx» → 5); 0 si no lo dice */
+export const gameQuarter = (fileName: string) => Number(fileName.match(/-q(\d+)/i)?.[1] ?? 0);
+/** Nombre de la clase que se crea desde el juego: el mismo que tendrá su informe de competencias, para que este luego la reemplace */
+export const claseNameFromGame = (fileName: string) => { const c = gameCode(fileName); return c ? `Clase ${c}` : fileName.replace(/\.(xlsx|xls|csv)$/i, ""); };
+
+/** Une dos informes del mismo juego (p. ej. igrades + itimespent). Lo de `nuevo` manda cuando trae dato. */
+export function mergeIgrades(viejo: Igrades, nuevo: Igrades): Igrades {
+  const keyJ = (j: Jugador) => j.email || normText(j.nombre);
+  const mezcla = <T extends object>(a: T, b: T): T => {
+    const out = { ...a } as Record<string, unknown>;
+    Object.entries(b).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== "") out[k] = v; });
+    return out as T;
+  };
+  const une = <T extends object>(xs: T[], ys: T[], key: (x: T) => string) => {
+    const m = new Map(xs.map((x) => [key(x), x] as const));
+    ys.forEach((y) => { const x = m.get(key(y)); m.set(key(y), x ? mezcla(x, y) : y); });
+    return [...m.values()];
+  };
+  return { jugadores: une(viejo.jugadores, nuevo.jugadores, keyJ), equipos: une(viejo.equipos, nuevo.equipos, (e) => normText(e.equipo)) };
 }
 
 /* ---------- utilidades ---------- */

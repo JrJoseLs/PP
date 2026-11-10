@@ -98,7 +98,7 @@ export default function ClaseDetalle() {
         </section>
       </div>
 
-      {([["Por carrera", d.carreras], ["Por equipo del juego", d.equipos]] as const).map(([titulo, gs]) => gs.length > 1 && (
+      {([["Por carrera", d.carreras], ["Por equipo del juego", d.equipos]] as const).map(([titulo, gs]) => gs.length > 1 && c.metrics.length > 0 && gs.some((g) => g.rows.length > 1) && (
         <section className="card pad" key={titulo}>
           <h3>{titulo}</h3>
           <div className="ctable">

@@ -65,6 +65,7 @@ export interface Desempeno {
   minutos: number | null;          // tiempo propio
   puntaje: number | null;          // puntuación calculada automáticamente
   puntaje_ajustado: number | null; // ajustada por el instructor
+  tiempos?: number[] | null;       // minutos de cada trimestre (informe itimespent)
 }
 export interface DesempenoEquipo {
   clase_id: string;
@@ -73,6 +74,7 @@ export interface DesempenoEquipo {
   bsc_acum: number | null;
   bsc: number | null;
   minutos: number | null;          // tiempo total del equipo
+  tiempos?: number[] | null;
   percentil: number | null;
   puntaje: number | null;
 }

@@ -1029,6 +1029,16 @@ button.ms { cursor: pointer; }
 .pf.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn-ink); }
 .pf.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad-ink); }
 @media (max-width: 700px) { .tbm { grid-template-columns: 1fr 1fr; } .tbm > :nth-child(4) { display: none; } .tb-members { padding-left: 8px; } }
+.gc-nueva { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; padding: 12px; border-radius: 12px; background: var(--fill-1); }
+.gc-nueva .title-input { font-size: 17px; }
+.sg-trim { margin: 0 0 14px; }
+.trim-cols { display: flex; gap: 10px; align-items: flex-end; overflow-x: auto; padding-bottom: 2px; }
+.trim { flex: 1 0 72px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.trim-bars { height: 90px; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 4px; border-bottom: 1px solid var(--sep); }
+.trim-bars i { width: 16px; border-radius: 4px 4px 0 0; background: var(--fill-3); min-height: 2px; transition: height .5s var(--ease); }
+.trim-bars i.me { background: var(--accent); }
+.trim b { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.trim small { font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
