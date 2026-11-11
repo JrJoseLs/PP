@@ -18,6 +18,12 @@ export const teamColors = (equipos: string[]) => new Map([...new Set(equipos)].s
   [e, i < SERIES_COLORS.length ? SERIES_COLORS[i] : `hsl(${Math.round((i * 137.508 + 20) % 360)} 70% 58%)`]));
 const eqDe = (r: Row) => r.juego?.equipo || r.equipo || "—";
 const sameEq = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();
+/** Juego individual: cada equipo (empresa) tiene un solo estudiante, así que «equipo» y «estudiante» son lo mismo */
+export function esIndividual(rows: Row[]) {
+  const n = new Map<string, number>();
+  rows.forEach((r) => { const k = eqDe(r).trim().toUpperCase(); n.set(k, (n.get(k) ?? 0) + 1); });
+  return rows.length > 0 && [...n.values()].every((c) => c <= 1);
+}
 
 /* Perfil del estudiante según dónde cae frente a las medianas de la clase (tiempo × competencias) */
 const PERFILES = ["Eficiente", "Comprometido", "Tiempo sin resultado", "Poca participación"] as const;
@@ -30,8 +36,8 @@ function perfiles(rows: Row[]) {
 }
 
 /* ---------- Dispersión: tiempo invertido vs. resultado, con cuadrantes ---------- */
-export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: {
-  rows: Row[]; onPick(r: Row): void; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void;
+export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus, individual }: {
+  rows: Row[]; onPick(r: Row): void; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void; individual?: boolean;
 }) {
   // sin informe de competencias todavía, se empieza por lo que sí hay
   const [eje, setEje] = useState<EjeY>(() => (rows.some((r) => r.indice !== null) ? "indice" : "bsc_acum"));
@@ -62,9 +68,9 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
   return (
     <div className="tscatter">
       <div className="card-h">
-        <Segmented size="sm" value={eje} onChange={setEje} options={[
-          ...(rows.some((r) => r.indice !== null) ? [{ value: "indice" as const, label: "Competencias" }] : []),
-          { value: "bsc_acum" as const, label: "Scorecard" }]} />
+        {rows.some((r) => r.indice !== null)
+          ? <Segmented size="sm" value={eje} onChange={setEje} options={[{ value: "indice", label: "Competencias" }, { value: "bsc_acum", label: "Scorecard" }]} />
+          : <span className="muted small">Eje vertical: <b>Scorecard acumulado</b></span>}
         {relacion && <span className="muted small">Relación tiempo–{EJE[eje].corto}: <b>{relacion}</b> (r = {r!.toFixed(2)})</span>}
       </div>
       <div className="tscatter-plot">
@@ -82,7 +88,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
           <text x={W - Rr - 6} y={H - B - 8} className="ql warn" textAnchor="end">{nombres[2]} · {cuenta[2]}</text>
           <text x={L + 6} y={H - B - 8} className="ql">{nombres[3]} · {cuenta[3]}</text>
           <text x={(L + W - Rr) / 2} y={H - 4} className="ax" textAnchor="middle">Tiempo invertido en el juego →</text>
-          <text x={14} y={(T + H - B) / 2} className="ax" textAnchor="middle" transform={`rotate(-90 14 ${(T + H - B) / 2})`}>{EJE[eje].label} →</text>
+          <text x={14} y={(T + H - B) / 2} className="ax" textAnchor="middle" transform={`rotate(-90 14 ${(T + H - B) / 2})`}>{eje === "bsc_acum" && individual ? "Scorecard acumulado" : EJE[eje].label} →</text>
           {orden.map((p) => (
             <circle key={p.r.id} cx={X(p.juego!.minutos!)} cy={Y(EJE[eje].get(p)!)} r={hover === p ? 8 : focus && !dim(p) ? 7 : 6} fill={colors.get(eqDe(p))}
               className={"dot-pt" + (dim(p) ? " dim" : "")}
@@ -96,7 +102,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
           </div>
         )}
       </div>
-      <div className="team-chips" role="group" aria-label="Resaltar un equipo">
+      {!individual && <div className="team-chips" role="group" aria-label="Resaltar un equipo">
         {[...colors.entries()].filter(([e]) => porEq.has(e)).map(([e, c]) => {
           const on = !!focus && sameEq(focus, e);
           return (
@@ -107,8 +113,8 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus }: 
           );
         })}
         {focus && onFocus && <button type="button" className="link small" onClick={() => onFocus(null)}>Ver todos</button>}
-      </div>
-      <p className="muted tiny">Las líneas punteadas son la mediana de la clase. {onFocus ? "Toca un equipo para resaltarlo y un punto para abrir la ficha del estudiante." : "Toca un punto para abrir la ficha del estudiante."}</p>
+      </div>}
+      <p className="muted tiny">Las líneas punteadas son la mediana de la clase. {onFocus && !individual ? "Toca un equipo para resaltarlo y un punto para abrir la ficha del estudiante." : "Toca un punto para abrir la ficha del estudiante."}</p>
     </div>
   );
 }
@@ -226,24 +232,30 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
 /* ---------- Panel completo de la clase: dispersión + Equipos / Estudiantes con resaltado compartido ---------- */
 export function GamePanel({ rows, equipos, onPick }: { rows: Row[]; equipos: DesempenoEquipo[]; onPick(r: Row): void }) {
   const [focus, setFocus] = useState<string | null>(null);
-  const [vista, setVista] = useState<"equipos" | "estudiantes" | "trimestres">(equipos.length ? "equipos" : "estudiantes");
+  const individual = esIndividual(rows);
+  const [vista, setVista] = useState<"equipos" | "estudiantes" | "trimestres">(equipos.length && !individual ? "equipos" : "estudiantes");
   const nq = nTrim(equipos);
-  const colors = useMemo(() => teamColors([...equipos.map((e) => e.equipo), ...rows.map(eqDe)]), [equipos, rows]);
+  const hayEvolucion = equipos.some((e) => (["bsc_acum", "tiempo"] as SerieQ[]).some((k) => valoresQ(e, k, nq).filter((v) => v !== null).length >= 2));
+  const pestanas = [
+    ...(equipos.length && !individual ? [{ value: "equipos" as const, label: `Equipos · ${equipos.length}` }] : []),
+    { value: "estudiantes" as const, label: `Estudiantes · ${rows.length}` },
+    ...(hayEvolucion ? [{ value: "trimestres" as const, label: `Trimestres · ${nq}` }] : [])];
+  // juego individual: un solo color (el equipo no agrupa a nadie) y el nombre del estudiante en lugar del de la empresa
+  const colors = useMemo(() => individual ? new Map([...equipos.map((e) => e.equipo), ...rows.map(eqDe)].map((e) => [e, "var(--accent)"]))
+    : teamColors([...equipos.map((e) => e.equipo), ...rows.map(eqDe)]), [equipos, rows, individual]);
+  const nombres = useMemo(() => individual ? new Map(rows.map((r) => [eqDe(r).trim().toUpperCase(), displayName(r.r.nombre)])) : undefined, [rows, individual]);
   const conT = rows.filter((r) => r.juego?.minutos != null);
   return (
     <>
-      {conT.length > 0 && <><h4 className="sub-h">Tiempo invertido vs. resultado</h4><TimeScatter rows={conT} onPick={onPick} colors={colors} focus={focus} onFocus={setFocus} /></>}
+      {conT.length > 0 && <><h4 className="sub-h">Tiempo invertido vs. resultado</h4><TimeScatter rows={conT} onPick={onPick} colors={colors} focus={focus} onFocus={setFocus} individual={individual} /></>}
       <div className="card-h game-tabs">
-        <Segmented size="sm" value={vista} onChange={setVista} options={[
-          ...(equipos.length ? [{ value: "equipos" as const, label: `Equipos · ${equipos.length}` }] : []),
-          { value: "estudiantes" as const, label: `Estudiantes · ${rows.length}` },
-          ...(equipos.length && nq > 0 ? [{ value: "trimestres" as const, label: `Trimestres · ${nq}` }] : [])]} />
-        {focus && <span className="muted small">Resaltado: <b>{focus}</b> · <button type="button" className="link small" onClick={() => setFocus(null)}>quitar</button></span>}
+        {pestanas.length > 1 ? <Segmented size="sm" value={vista} onChange={setVista} options={pestanas} /> : <h4 className="sub-h">{pestanas[0].label}</h4>}
+        {focus && <span className="muted small">Resaltado: <b>{nombres?.get(focus.trim().toUpperCase()) ?? focus}</b> · <button type="button" className="link small" onClick={() => setFocus(null)}>quitar</button></span>}
       </div>
-      {vista === "trimestres" && equipos.length > 0 ? <QuarterPanel equipos={equipos} colors={colors} focus={focus} onFocus={setFocus} />
-        : vista === "equipos" && equipos.length > 0
+      {vista === "trimestres" && hayEvolucion ? <QuarterPanel equipos={equipos} colors={colors} focus={focus} onFocus={setFocus} nombres={nombres} />
+        : vista === "equipos" && equipos.length > 0 && !individual
         ? <TeamBoard equipos={equipos} rows={rows} colors={colors} focus={focus} onFocus={setFocus} onPick={onPick} />
-        : <StudentGameTable rows={rows} colors={colors} focus={focus} onPick={onPick} />}
+        : <StudentGameTable rows={rows} colors={colors} focus={individual ? null : focus} onPick={onPick} />}
     </>
   );
 }
@@ -270,14 +282,14 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
       <p className="sg-frase">{frase}{puesto ? ` Eres el ${puesto}.º de ${conT.length} en tiempo dedicado.` : ""}</p>
       <div className="sg-bars">
         {barra("Tú", j.minutos, "me")}
-        {barra(`Promedio de tu equipo (${j.equipo || "—"})`, promEq)}
+        {eq.length > 1 && barra(`Promedio de tu equipo (${j.equipo || "—"})`, promEq)}
         {barra("Promedio de la clase", prom)}
       </div>
       {j.tiempos && j.tiempos.length > 0 && <TrimestreBars mine={j.tiempos} classRows={classRows} />}
-      <TeamEvolution row={row} classRows={classRows} />
+      <TeamEvolution row={row} classRows={classRows} individual={eq.length <= 1} />
       <div className="sg-kpis k3">
         <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div>
-        <div><small>Scorecard acumulado del equipo</small><b>{fmt(j.bsc_acum)}</b></div>
+        <div><small>{eq.length > 1 ? "Scorecard acumulado del equipo" : "Scorecard acumulado"}</small><b>{fmt(j.bsc_acum)}</b></div>
         <div><small>Trimestres jugados</small><b>{ultimoT(j) || "—"}</b></div>
       </div>
     </div>
@@ -343,7 +355,7 @@ export function GameBars({ series }: { series: { name: string; color: string; ro
 }
 
 /* ---------- Evolución por trimestre ---------- */
-export interface QSerie { name: string; color: string; values: (number | null)[]; dashed?: boolean; dim?: boolean; bold?: boolean; }
+export interface QSerie { name: string; key?: string; color: string; values: (number | null)[]; dashed?: boolean; dim?: boolean; bold?: boolean; }
 const Q_LABEL: Record<SerieQ, string> = { bsc: "Scorecard del trimestre", bsc_acum: "Scorecard acumulado", tiempo: "Tiempo del trimestre" };
 const qFmt = (k: SerieQ) => (v: number | null) => (k === "tiempo" ? fmtMin(v) : fmt(v));
 
@@ -378,7 +390,7 @@ export function QuarterLines({ series, n, k, height = 260, onPick }: { series: Q
             </g>
           ))}
           {orden.map((s) => (
-            <g key={s.name} className={"qs" + (s.dim ? " dim" : "") + (s.bold ? " bold" : "")} onClick={() => onPick?.(s.name)} style={{ cursor: onPick ? "pointer" : undefined }}>
+            <g key={s.name} className={"qs" + (s.dim ? " dim" : "") + (s.bold ? " bold" : "")} onClick={() => onPick?.(s.key ?? s.name)} style={{ cursor: onPick ? "pointer" : undefined }}>
               <path d={path(s.values)} stroke={s.color} strokeDasharray={s.dashed ? "5 4" : undefined} />
               {s.values.map((v, i) => v !== null && <circle key={i} cx={X(i)} cy={Y(v)} r={s.bold ? 4.5 : 3} fill={s.color} />)}
             </g>
@@ -397,15 +409,22 @@ export function QuarterLines({ series, n, k, height = 260, onPick }: { series: Q
 }
 
 /** Vista «Trimestres» de la clase: líneas por equipo + tabla de cambios entre trimestres */
-export function QuarterPanel({ equipos, colors, focus, onFocus }: {
+export function QuarterPanel({ equipos, colors, focus, onFocus, nombres }: {
   equipos: DesempenoEquipo[]; colors: Map<string, string>; focus: string | null; onFocus(e: string | null): void;
+  /** Juego individual: nombre del estudiante de cada empresa */
+  nombres?: Map<string, string>;
 }) {
   const n = nTrim(equipos);
   const disponibles = (["bsc_acum", "tiempo"] as SerieQ[]).filter((k) => equipos.some((e) => valoresQ(e, k, n).filter((v) => v !== null).length > 0));
   const [k, setK] = useState<SerieQ>(disponibles[0] ?? "bsc_acum");
   const f = qFmt(k);
-  const series = equipos.map((e) => ({ name: e.equipo, color: colors.get(e.equipo) ?? "#888", values: valoresQ(e, k, n),
-    dim: !!focus && !sameEq(e.equipo, focus), bold: !!focus && sameEq(e.equipo, focus) }));
+  const series = equipos.map((e) => {
+    const on = !!focus && sameEq(e.equipo, focus);
+    // individual: todas las líneas en gris suave y la elegida en color, para que se lea sin una leyenda de 25 colores
+    return { name: nombres?.get(e.equipo.trim().toUpperCase()) ?? e.equipo, key: e.equipo, values: valoresQ(e, k, n),
+      color: nombres ? (on ? "var(--accent)" : "var(--text-3)") : colors.get(e.equipo) ?? "#888",
+      dim: !!focus && !on, bold: on };
+  });
   const prom = promedioQ(series.map((s) => s.values), n);
   const conPuntos = series.filter((s) => s.values.some((v) => v !== null));
   const ultimo = (v: (number | null)[]) => { for (let i = v.length - 1; i >= 0; i--) if (v[i] !== null) return i; return -1; };
@@ -418,7 +437,9 @@ export function QuarterPanel({ equipos, colors, focus, onFocus }: {
   return (
     <div className="qpanel">
       <div className="card-h">
-        <Segmented size="sm" value={k} onChange={setK} options={disponibles.map((x) => ({ value: x, label: x === "bsc_acum" ? "Scorecard acumulado" : "Tiempo" }))} />
+        {disponibles.length > 1
+          ? <Segmented size="sm" value={k} onChange={setK} options={disponibles.map((x) => ({ value: x, label: x === "bsc_acum" ? "Scorecard acumulado" : "Tiempo" }))} />
+          : <span className="muted small"><b>{Q_LABEL[k]}</b> por trimestre</span>}
         {mejora.length > 0 && <span className="muted small">Mayor mejora: <b>{mejora[0].s.name}</b> ({mejora[0].d! >= 0 ? "+" : ""}{f(mejora[0].d)})</span>}
       </div>
       <QuarterLines n={n} k={k} onPick={(name) => onFocus(focus && sameEq(focus, name) ? null : name)}
@@ -426,12 +447,12 @@ export function QuarterPanel({ equipos, colors, focus, onFocus }: {
       {pocos && <p className="note small">Por ahora solo hay un trimestre con este dato. Cada igrades nuevo de este juego que subas a esta clase añade un punto a las líneas.</p>}
       <div className="table-scroll sgt-scroll qtable-wrap">
         <table className="etable qtable">
-          <thead><tr><th>Equipo</th>{Array.from({ length: n }, (_, i) => <th key={i} className="num">T{i + 1}</th>)}<th className="num">Cambio</th></tr></thead>
+          <thead><tr><th>{nombres ? "Estudiante" : "Equipo"}</th>{Array.from({ length: n }, (_, i) => <th key={i} className="num">T{i + 1}</th>)}<th className="num">Cambio</th></tr></thead>
           <tbody>
             {[{ name: "Promedio de la clase", color: "var(--text-2)", values: prom, dim: false, bold: false }, ...filas].map((s, idx) => {
               const d = cambio(s.values);
               return (
-                <tr key={s.name} className={(idx === 0 ? "avg-row" : "") + (s.dim ? " faded" : "") + (s.bold ? " on" : "")} onClick={() => idx > 0 && onFocus(focus && sameEq(focus, s.name) ? null : s.name)}>
+                <tr key={s.name} className={(idx === 0 ? "avg-row" : "") + (s.dim ? " faded" : "") + (s.bold ? " on" : "")} onClick={() => { const key = (s as QSerie).key ?? s.name; if (idx > 0) onFocus(focus && sameEq(focus, key) ? null : key); }}>
                   <td><span className="eq-cell"><span className="dot" style={{ background: s.color }} /><b>{s.name}</b></span></td>
                   {s.values.map((v, i) => {
                     const p = i > 0 ? s.values[i - 1] : null;
@@ -445,13 +466,13 @@ export function QuarterPanel({ equipos, colors, focus, onFocus }: {
           </tbody>
         </table>
       </div>
-      <p className="muted tiny">{Q_LABEL[k]} de cada equipo en cada trimestre. ▲/▼ = sube o baja frente al trimestre anterior; «Cambio» = del primer al último trimestre con dato. Toca una línea o una fila para resaltar el equipo.</p>
+      <p className="muted tiny">{Q_LABEL[k]} de cada {nombres ? "estudiante" : "equipo"} en cada trimestre. ▲/▼ = sube o baja frente al trimestre anterior; «Cambio» = del primer al último trimestre con dato. Toca una línea o una fila para resaltar{nombres ? "lo" : " el equipo"}.</p>
     </div>
   );
 }
 
 /** Ficha del estudiante: cómo le fue a su equipo trimestre a trimestre frente a la clase */
-function TeamEvolution({ row, classRows }: { row: Row; classRows: Row[] }) {
+function TeamEvolution({ row, classRows, individual }: { row: Row; classRows: Row[]; individual: boolean }) {
   const j = row.juego!;
   const n = nTrim([j]);
   const mine = valoresQ(j, "bsc_acum", n);
@@ -461,10 +482,10 @@ function TeamEvolution({ row, classRows }: { row: Row; classRows: Row[] }) {
   const d = last !== null && first !== null ? last - first : null;
   return (
     <div className="sg-trim">
-      <h4 className="sub-h">Scorecard acumulado de tu equipo por trimestre</h4>
-      {d !== null && <p className="small">Del primer al último trimestre tu equipo {Math.abs(d) < 0.5 ? "se mantuvo estable" : d > 0 ? <>mejoró <b className="pos">+{fmt(d)}</b> puntos</> : <>bajó <b className="neg">{fmt(d)}</b> puntos</>}.</p>}
+      <h4 className="sub-h">{individual ? "Tu Scorecard acumulado por trimestre" : "Scorecard acumulado de tu equipo por trimestre"}</h4>
+      {d !== null && <p className="small">Del primer al último trimestre {individual ? "tu Scorecard" : "tu equipo"} {Math.abs(d) < 0.5 ? "se mantuvo estable" : d > 0 ? <>mejoró <b className="pos">+{fmt(d)}</b> puntos</> : <>bajó <b className="neg">{fmt(d)}</b> puntos</>}.</p>}
       <QuarterLines n={n} k="bsc_acum" height={200} series={[
-        { name: j.equipo || "Tu equipo", color: "var(--accent)", values: mine, bold: true },
+        { name: individual ? "Tú" : j.equipo || "Tu equipo", color: "var(--accent)", values: mine, bold: true },
         { name: "Promedio de la clase", color: "var(--text-2)", values: prom, dashed: true }]} />
     </div>
   );

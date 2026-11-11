@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "../data/store";
 import { Avatar, Icon, Segmented } from "../components/ui";
 import { useTheme, type ThemePref } from "../components/Theme";
-import { D, M, ROLE_PRESETS, low, metricDefaultName, metricDesc, metricOverridesRaw, roleNames, rolLabel, type RoleNames } from "../lib/labels";
+import { D, M, ROLE_PRESETS, low, metricDefaultName, metricDesc, metricOverridesRaw, roleNames, cargoDe, type RoleNames } from "../lib/labels";
 import { METRICS_FALLBACK, isRisk, normText } from "../lib/metrics";
 import { cloudConfigured } from "../data/api";
 import { PageHead } from "./Dashboard";
@@ -19,7 +19,7 @@ export default function Ajustes() {
       <div className="settings">
         <section className="card pad">
           <div className="row-gap"><Avatar name={user!.nombre} size={56} />
-            <div><h3>{user!.nombre}</h3><p className="muted">@{user!.usuario} · {rolLabel(user!.rol)}</p></div></div>
+            <div><h3>{user!.nombre}</h3><p className="muted">@{user!.usuario} · {cargoDe(user!)}</p></div></div>
         </section>
 
         <section className="card pad">

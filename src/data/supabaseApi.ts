@@ -70,7 +70,11 @@ export class SupabaseApi implements Api {
     if (data?.error) throw new Error(data.error);
     return data;
   }
-  async createUser(u: NewUser) { return (await this.fn({ action: "create", ...u })).profile as Profile; }
+  async createUser({ cargo, ...u }: NewUser) {
+    const p = (await this.fn({ action: "create", ...u })).profile as Profile;
+    if (cargo) { await this.updateProfile(p.id, { cargo }); p.cargo = cargo; }
+    return p;
+  }
   async setPassword(id: string, password: string) { await this.fn({ action: "set_password", id, password }); }
   async deleteUser(id: string) { await this.fn({ action: "delete", id }); }
   async changeMyPassword(password: string) {
@@ -79,6 +83,7 @@ export class SupabaseApi implements Api {
   }
   async updateProfile(id: string, patch: Partial<Profile>) {
     const { error } = await this.sb.from("profiles").update(patch).eq("id", id);
+    if (error && /cargo/i.test(error.message)) throw new Error("Falta actualizar la base de datos: ejecuta supabase/migrations/006_cargos.sql en el SQL Editor de Supabase.");
     if (error) throw error;
   }
 

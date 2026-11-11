@@ -11,7 +11,7 @@ import { PageHead } from "./Dashboard";
 import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
 import { GridEditor, ReuploadButton } from "../components/ClassEditor";
-import { GamePanel, IncompleteList } from "../components/GameCharts";
+import { GamePanel, IncompleteList, esIndividual } from "../components/GameCharts";
 import { fmtMin } from "../lib/game";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
@@ -127,7 +127,7 @@ export default function ClaseDetalle() {
             <div className="stats game-kpis">
               <Stat label="Tiempo promedio" value={fmtMin(prom)} sub="por estudiante" />
               <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.completos.length, "estudiante", "estudiantes")} />
-              <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={`promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
+              <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={esIndividual(conJ) ? "promedio de la clase" : `promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
               <Stat label="Completaron la simulación" value={`${juego.completos.length} de ${juego.jugadores.length}`} sub={juego.meta ? `llegaron al trimestre ${juego.meta}` : "jugadores"} />
             </div>
             <GamePanel rows={conJ} equipos={juego.equiposOk} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />

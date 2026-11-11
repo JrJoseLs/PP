@@ -56,12 +56,14 @@ export function buildDemo(): DemoDb {
 
   FACULTADES.forEach((f, fi) => {
     const decId = "u-" + f.decano[0];
-    profiles.push({ id: decId, usuario: f.decano[0], nombre: f.decano[1], rol: "decano", decano_id: null, activo: true, password: "demo" });
+    profiles.push({ id: decId, usuario: f.decano[0], nombre: f.decano[1], rol: "decano", decano_id: null, activo: true, password: "demo", cargo: "Director/Coordinador académico" });
     f.carreras.forEach(([codigo, nombre]) => carreras.push({ codigo, nombre }));
     const facBase = [0.25, 0.05, 0.35, -0.15][fi];
     f.maestros.forEach(([u, n], mi) => {
       const mId = "u-" + u;
-      profiles.push({ id: mId, usuario: u, nombre: n, rol: "maestro", decano_id: decId, activo: true, password: "demo" });
+      // cargos de ejemplo: la mayoría docentes, alguno invitado, mentor o investigador
+      const cargo = ["Docente", "Docente", "Docente invitado", "Facilitador/Mentor"][mi] ?? "Docente";
+      profiles.push({ id: mId, usuario: u, nombre: n, rol: "maestro", decano_id: decId, activo: true, password: "demo", cargo: fi === 3 && mi === 3 ? "Investigador" : cargo });
       const cId = id("c", ++ci);
       const grupo = String(1500 + ci * 7);
       clases.push({
@@ -134,7 +136,7 @@ export function buildDemo(): DemoDb {
       });
     });
   });
-  return { version: 5, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
+  return { version: 6, profiles, clases, resultados, carreras, roster, ajustes: {}, desempeno: jugadores, desempenoEquipos: equiposJuego };
 }
 
 export const DEMO_ACCOUNTS = [

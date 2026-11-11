@@ -20,7 +20,7 @@ export class DemoApi implements Api {
   constructor() {
     let db: DemoDb | null = null;
     try { db = JSON.parse(localStorage.getItem(DB_KEY) || "null"); } catch { /* */ }
-    this.db = db && db.version === 5 ? db : buildDemo();
+    this.db = db && db.version === 6 ? db : buildDemo();
   }
   private save() { try { localStorage.setItem(DB_KEY, JSON.stringify(this.db)); } catch { /* lleno o bloqueado */ } }
   static reset() { try { localStorage.removeItem(DB_KEY); } catch { /* */ } }
@@ -77,7 +77,7 @@ export class DemoApi implements Api {
     if (n.password.length < 8) throw new Error("La contraseña debe tener al menos 8 caracteres");
     if (this.db.profiles.some((p) => p.usuario === usuario)) throw new Error("Ese usuario ya existe");
     const rol = u.rol === "admin" ? n.rol : "maestro";
-    const p = { id: "u-" + uid(), usuario, nombre: n.nombre.trim() || usuario, rol, activo: true, password: n.password,
+    const p = { id: "u-" + uid(), usuario, nombre: n.nombre.trim() || usuario, rol, activo: true, password: n.password, cargo: n.cargo ?? null,
       decano_id: rol === "maestro" ? (u.rol === "decano" ? u.id : n.decano_id) : null };
     this.db.profiles.push(p); this.save();
     return strip(p);

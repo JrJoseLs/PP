@@ -115,7 +115,7 @@ export function GameCard({ job, drafts, onTarget, onNueva, onSave, onClose }: {
         </div>
       )}
       {yaTiene && !job.saved && (suma
-        ? <p className="note small">Esta clase ya tiene {tPrev.length ? `los trimestres ${lista(tPrev)}` : "desempeño"} de este juego: {corte ? `se añade el trimestre ${corte}` : "se actualiza"} y se conserva el historial para comparar trimestres.</p>
+        ? <p className="note small">Esta clase ya tiene {tPrev.length ? `${tPrev.length > 1 ? "los trimestres" : "el trimestre"} ${lista(tPrev)}` : "desempeño"} de este juego: {corte ? `se añade el trimestre ${corte}` : "se actualiza"} y se conserva el historial para comparar trimestres.</p>
         : <p className="note small">Esta clase ya tiene desempeño de otro juego: se reemplazará por el de este archivo.</p>)}
       {sin.length > 0 && job.target && (
         <p className="small muted">{sin.length === jugadores.length ? "Ninguno de estos jugadores está en la clase elegida: ¿es otra clase? Prueba «Crear clase nueva». " : ""}

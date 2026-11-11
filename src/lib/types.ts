@@ -7,6 +7,8 @@ export interface Profile {
   rol: Rol;
   decano_id: string | null;
   activo: boolean;
+  /** Cargo visible (Docente invitado, Investigador…). El permiso lo da «rol». */
+  cargo?: string | null;
 }
 
 export interface Clase {
@@ -101,6 +103,7 @@ export interface NewUser {
   password: string;
   rol: Rol;
   decano_id: string | null;
+  cargo?: string | null;
 }
 
 export interface ClaseDraft {

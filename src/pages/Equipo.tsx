@@ -5,7 +5,7 @@ import { Avatar, Empty, Icon, Modal, Segmented } from "../components/ui";
 import { LevelBar } from "../components/Charts";
 import { avgIndex, fmt, plural } from "../lib/metrics";
 import type { Profile, Rol } from "../lib/types";
-import { D, M, low, rolLabel } from "../lib/labels";
+import { CARGOS, D, M, cargoDe, cargoRol, low, rolLabel } from "../lib/labels";
 import { PageHead } from "./Dashboard";
 import { downloadAccountsTemplate, downloadCredentials, parseAccounts, type AccountRow } from "../lib/templates";
 
@@ -107,7 +107,7 @@ function MaestroCard({ m, onEdit, draggable }: { m: Profile; onEdit(): void; dra
       <Avatar name={m.nombre} size={30} />
       <div className="rank-txt">
         <b>{m.nombre}{!m.activo && <span className="pill">inactivo</span>}</b>
-        <small>{cls.length ? cls.map((c) => c.nombre).join(" · ") : "Sin clases asignadas"}</small>
+        <small>{cargoDe(m) !== M().one ? <span className="cargo">{cargoDe(m)} · </span> : null}{cls.length ? cls.map((c) => c.nombre).join(" · ") : "Sin clases asignadas"}</small>
       </div>
       {rr.length > 0 && <span className="org-idx sm">{fmt(avgIndex(rr))}</span>}
     </div>
@@ -125,7 +125,7 @@ function OrgDecano({ onEdit }: { onEdit(p: Profile): void }) {
         const rr = cls.flatMap((c) => rowsByClase.get(c.id) ?? []);
         return (
           <button key={m.id} className={"card mbig" + (m.activo ? "" : " off")} onClick={() => onEdit(m)}>
-            <div className="row-gap"><Avatar name={m.nombre} size={44} /><span className="rank-txt"><b>{m.nombre}</b><small>@{m.usuario}{!m.activo ? " · inactivo" : ""}</small></span><span className="org-idx">{fmt(avgIndex(rr))}</span></div>
+            <div className="row-gap"><Avatar name={m.nombre} size={44} /><span className="rank-txt"><b>{m.nombre}</b><small>{cargoDe(m)} · @{m.usuario}{!m.activo ? " · inactivo" : ""}</small></span><span className="org-idx">{fmt(avgIndex(rr))}</span></div>
             <LevelBar rows={rr} />
             <div className="chips">{cls.length ? cls.map((c) => <span key={c.id} className="pill"><span className="dot" style={{ background: c.color }} />{c.nombre}</span>) : <span className="pill warn">Sin clases</span>}</div>
           </button>
@@ -208,7 +208,7 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
   const { user, snap, run, api } = useApp();
   const isAdmin = user!.rol === "admin";
   const [f, setF] = useState({ nombre: p?.nombre ?? "", usuario: p?.usuario ?? "", password: p ? "" : genPass(),
-    rol: (p?.rol ?? "maestro") as Rol, decano_id: p ? p.decano_id : isAdmin ? decanoFor : user!.id, activo: p?.activo ?? true });
+    rol: (p?.rol ?? "maestro") as Rol, cargo: p ? cargoDe(p) : "Docente", decano_id: p ? p.decano_id : isAdmin ? decanoFor : user!.id, activo: p?.activo ?? true });
   const [touchedUser, setTouchedUser] = useState(!!p);
   const [created, setCreated] = useState<{ usuario: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -218,11 +218,12 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);
     if (!p) {
-      const res = await run((a) => a.createUser({ nombre: f.nombre, usuario: f.usuario, password: f.password, rol: f.rol, decano_id: f.rol === "maestro" ? f.decano_id : null }), "Cuenta creada");
+      const res = await run((a) => a.createUser({ nombre: f.nombre, usuario: f.usuario, password: f.password, rol: f.rol, cargo: f.cargo, decano_id: f.rol === "maestro" ? f.decano_id : null }), "Cuenta creada");
       if (res) setCreated({ usuario: f.usuario, password: f.password });
     } else {
       const patch: Partial<Profile> = { nombre: f.nombre, activo: f.activo };
       if (isAdmin) { patch.rol = f.rol; patch.decano_id = f.rol === "maestro" ? f.decano_id : null; }
+      if (!self && f.cargo !== cargoDe(p)) patch.cargo = f.cargo;
       const ok = await run((a) => a.updateProfile(p.id, patch), "Cambios guardados");
       if (ok !== false && f.password) await run((a) => a.setPassword(p.id, f.password), "Contraseña actualizada");
       onClose();
@@ -250,9 +251,12 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
         <label className="field"><span>{p ? "Nueva contraseña (opcional)" : "Contraseña"}</span>
           <span className="input-row"><input value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} minLength={p && !f.password ? 0 : 8} required={!p} placeholder={p ? "Dejar vacío para no cambiarla" : ""} />
             <button type="button" className="btn sm" onClick={() => setF({ ...f, password: genPass() })} title="Generar"><Icon name="key" size={14} /></button></span></label>
-        {isAdmin && !self && (
-          <div className="field"><span>Rol</span>
-            <Segmented value={f.rol} onChange={(v) => setF({ ...f, rol: v })} options={(["admin", "decano", "maestro"] as Rol[]).map((r) => ({ value: r, label: rolLabel(r) }))} /></div>
+        {!self && (
+          <label className="field"><span>Cargo</span>
+            <select value={f.cargo} onChange={(e) => setF({ ...f, cargo: e.target.value, rol: cargoRol(e.target.value) })}>
+              {CARGOS.filter((c) => isAdmin || c.rol === "maestro").map((c) => <option key={c.label} value={c.label}>{c.label}</option>)}
+            </select>
+            <small className="muted">{CARGOS.find((c) => c.label === f.cargo)?.nota}</small></label>
         )}
         {isAdmin && f.rol === "maestro" && (
           <label className="field"><span>{D().one} a cargo</span>

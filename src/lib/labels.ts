@@ -11,6 +11,8 @@ export interface RoleName { one: string; many: string; }
 export interface RoleNames { decano: RoleName; maestro: RoleName; }
 
 export const ROLE_PRESETS: { id: string; titulo: string; nota: string; names: RoleNames }[] = [
+  { id: "academico", titulo: "Director/Coordinador académico · Docente", nota: "Recomendado: los cargos de la institución",
+    names: { decano: { one: "Director/Coordinador académico", many: "Directores y coordinadores" }, maestro: { one: "Docente", many: "Docentes" } } },
   { id: "supervisor", titulo: "Supervisor/a · Colaborador/a", nota: "Genérico, sirve para cualquier institución",
     names: { decano: { one: "Supervisor/a", many: "Supervisores" }, maestro: { one: "Colaborador/a", many: "Colaboradores" } } },
   { id: "coordinador", titulo: "Coordinador/a · Docente", nota: "Habitual en universidades",
@@ -29,13 +31,32 @@ export function setRoleNames(r?: Partial<RoleNames> | null) {
   roles = { decano: clean(r?.decano, DEFAULT_ROLES.decano), maestro: clean(r?.maestro, DEFAULT_ROLES.maestro) };
 }
 export const roleNames = () => roles;
+/* ---------- Cargos ----------
+   El permiso sigue siendo uno de tres niveles (admin, decano, maestro); el cargo es el nombre que se ve.
+   Los cuatro cargos de nivel «maestro» ven solo las clases que se les asignan. */
+export interface Cargo { label: string; rol: Rol; nota: string; }
+export const CARGOS: Cargo[] = [
+  { label: "Administración", rol: "admin", nota: "Carga clases y gestiona todo" },
+  { label: "Director/Coordinador académico", rol: "decano", nota: "Asigna sus clases a su equipo" },
+  { label: "Docente", rol: "maestro", nota: "Ve las clases que se le asignan" },
+  { label: "Docente invitado", rol: "maestro", nota: "Ve las clases que se le asignan" },
+  { label: "Facilitador/Mentor", rol: "maestro", nota: "Ve las clases que se le asignan" },
+  { label: "Investigador", rol: "maestro", nota: "Ve las clases que se le asignan" },
+];
+/** Cargo de una persona: el guardado si es válido para su nivel; si no, el nombre del nivel */
+export function cargoDe(p: { rol: Rol; cargo?: string | null }) {
+  return p.cargo && CARGOS.some((c) => c.label === p.cargo && c.rol === p.rol) ? p.cargo : rolLabel(p.rol);
+}
+/** Nivel por defecto de un cargo */
+export const cargoRol = (label: string): Rol => CARGOS.find((c) => c.label === label)?.rol ?? "maestro";
+
 /** Rol con mayúscula inicial ("Supervisor/a") */
 export const rolLabel = (r: Rol) => (r === "admin" ? "Administración" : roles[r].one);
 /** Atajos: D = quien reparte clases (decano), M = quien las consulta (maestro) */
 export const D = () => roles.decano;
 export const M = () => roles.maestro;
 /** Para usar dentro de una frase: "sin supervisor/a" */
-export const low = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+export const low = (s: string) => s.toLowerCase();
 
 /* ---------- Competencias ---------- */
 interface MetricInfo { nombre: string; desc: string; }
