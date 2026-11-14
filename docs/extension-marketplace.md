@@ -52,6 +52,22 @@ Reglas:
 4. **Un mensaje por archivo.** Si se envían el igrades y el itimespent seguidos, el comparador los une solo.
 5. Hay que esperar `MARKETPLACE_JR_RECEIVED` con el mismo `requestId` antes de dar el envío por hecho, igual que ahora.
 
+## Nombre de la clase de Marketplace (v3.5)
+
+Para que el Desempeño y las Competencias de una misma clase terminen en **la misma clase** del comparador, la extensión puede indicar el nombre que muestra Marketplace (`#gameSwitcherMenuTitle`, por ejemplo `jser-MKTJun26`). Hay dos formas de hacerlo, y el comparador acepta ambas:
+
+- **Si carga el archivo en el campo de Importar:** antes de disparar `change`, poner `input.dataset.marketplaceClass = "jser-MKTJun26"`. El comparador lo lee y lo borra.
+- **Si usa mensajes:** añadir `clase: "jser-MKTJun26"` al `payload`.
+
+Qué hace el comparador con ese nombre (nunca guarda solo):
+- Si hay **una** clase con ese nombre, la propone como destino.
+- Si hay **varias**, no elige ninguna y pide al usuario que escoja.
+- Si no hay ninguna, propone **Clase nueva** con ese nombre. Solo completa el grupo cuando el directorio da el mismo grupo para todos los jugadores.
+- Al guardar, si ya existe una clase con ese nombre, la usa en lugar de crear otra.
+- Solo acepta nombres de letras, números y `. _ -` (hasta 100 caracteres). Cualquier otra cosa se descarta.
+
+El informe de competencias enviado como `Informe_Competencias_jser-MKTJun26.xlsx` se asocia solo con esa misma clase.
+
 ## Datos que el comparador usa (y los que no)
 
 - **Usa:** nombre, apellido, correo, empresa (equipo), «Resultados del Trimestre» (trimestre alcanzado), el **Scorecard acumulado** y el **tiempo** (total y por trimestre).

@@ -24,6 +24,11 @@ import { friendlyError } from "../data/api";
 import { MSG, READY_INFO, checkPayload, payloadToFile } from "../lib/marketplace";
 
 type Est = ClaseDraft["estudiantes"][number];
+
+/** Nombre de clase sugerido por la extensión para cada archivo recibido */
+const pistaDe = new WeakMap<File, string>();
+/** Solo se acepta un nombre corto de letras, números y . _ - (p. ej. «jser-MKTJun26»); cualquier otra cosa se descarta */
+const limpiarPista = (s: string) => { const t = s.replace(/\s+/g, " ").trim().slice(0, 100); return /^[\p{L}\p{N}][\p{L}\p{N}_. -]*$/u.test(t) ? t : ""; };
 /** Enlace de un estudiante del informe con el directorio */
 interface Link { found: Found; choice: RosterEntry | "nuevo" | null; }
 interface Draft extends Omit<ClaseDraft, "estudiantes"> { key: string; replaceId: string; raw: Est[]; links: Link[]; }
@@ -72,6 +77,7 @@ export default function Importar() {
       window.postMessage({ type: MSG.received, requestId: c.payload.requestId }, location.origin);
       try {
         const file = await payloadToFile(c.payload);
+        if (typeof c.payload.clase === "string") pistaDe.set(file, c.payload.clase);
         setTab("importar");
         setIncoming((f) => [...f, file]);
         toast(c.tipo === "juego" ? `Recibido desde Marketplace: desempeño del juego de ${plural(c.estudiantes, "jugador", "jugadores")}. Revisa la clase y guarda.` : `Recibido desde Marketplace: ${plural(c.estudiantes, "estudiante", "estudiantes")}. Revisa y guarda.`);
@@ -125,9 +131,11 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
   const input = useRef<HTMLInputElement>(null);
   const comp = completeness(roster);
 
-  const handle = async (files: FileList | File[]) => {
+  /** `pistaClase`: nombre de la clase en Marketplace que manda la extensión (solo sugiere el destino, nunca guarda) */
+  const handle = async (files: FileList | File[], pistaClase = "") => {
     const arr = Array.from(files);
     if (!arr.length) return;
+    const pista = limpiarPista(pistaClase || arr.map((f) => pistaDe.get(f) ?? "").find(Boolean) || "");
     setBusy(`Leyendo ${plural(arr.length, "archivo", "archivos")}…`);
     const parsed: { file: File; rows: unknown[][] }[] = [];
     const nuevosJuegos: GameJob[] = [];
@@ -180,7 +188,14 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
       const drs = [...drafts, ...nd].map((d) => ({ key: d.key, raw: d.raw }));
       // los informes del mismo juego (igrades + itimespent, o varios trimestres) se unen en una sola tarjeta
       const { jobs: unidos, unidos: n } = mergeGameJobs([...games, ...nuevosJuegos]);
-      setGames(unidos.map((j) => (j.target || j.saved ? j : { ...j, target: suggestTarget(j.data, cls, drs) })));
+      const nuevos = new Set(nuevosJuegos.flatMap((j) => j.files));
+      setGames(unidos.map((j) => {
+        // no se pisa lo que el usuario ya eligió ni lo ya guardado
+        if (j.saved || games.some((g) => g.key === j.key && g.target)) return j;
+        // la extensión indicó la clase de Marketplace: se usa para el informe que acaba de llegar
+        if (pista && j.files.some((f) => nuevos.has(f))) return { ...j, ...destinoPorPista(j, pista, [...drafts, ...nd]) };
+        return { ...j, target: suggestTarget(j.data, cls, drs) };
+      }));
       toast(`Desempeño del juego: ${plural(unidos.filter((j) => !games.includes(j)).reduce((a, j) => a + j.data.jugadores.length, 0), "jugador", "jugadores")}${n ? ` · ${plural(n, "informe unido", "informes unidos")} al de su mismo juego` : ""}. Revisa a qué clase pertenece.`);
     }
     setBusy(null);
@@ -194,6 +209,18 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
     });
     return api.importClase({ nombre: g.nueva.nombre.trim(), grupo: g.nueva.grupo, periodo: g.nueva.periodo, color: PALETTE[snap.clases.length % PALETTE.length],
       metrics: [], archivo: g.files.join(", "), estudiantes, decanos: g.nueva.decanos });
+  };
+  /** Destino según el nombre de clase de Marketplace: la clase (o borrador) con ese nombre; si no hay, «Clase nueva» con ese nombre.
+      El grupo solo se completa si el directorio da el MISMO grupo para todos los jugadores: no se inventa. */
+  const destinoPorPista = (j: GameJob, pista: string, borradores: { key: string; nombre: string }[]): Partial<GameJob> => {
+    const iguales = snap.clases.filter((c) => normText(c.nombre) === normText(pista));
+    if (iguales.length === 1) return { pista, target: "clase:" + iguales[0].id };
+    if (iguales.length > 1) return { pista, ambiguo: iguales.length, target: "" };
+    const borrador = borradores.find((d) => normText(d.nombre) === normText(pista));
+    if (borrador) return { pista, target: "draft:" + borrador.key };
+    const grupos = j.data.jugadores.map((x) => (x.email ? roster.find((p) => (p.email ?? "").toLowerCase() === x.email)?.grupo ?? "" : ""));
+    const grupo = grupos.length && grupos.every((g) => g && g === grupos[0]) ? grupos[0] : "";
+    return { pista, target: "nueva", nueva: { ...j.nueva, nombre: pista, grupo: j.nueva.grupo || grupo } };
   };
   const saveGame = async (g: GameJob, claseId: string) => {
     // si la clase ya tiene otro trimestre del mismo juego, se suma al historial en vez de reemplazarlo
@@ -257,7 +284,13 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
         <h3>{busy ?? "Suelta aquí uno o varios archivos"}</h3>
         <p className="muted">Informes del juego (<code>icompetencyreport…</code>) y listados de estudiantes de cualquier origen: ADM535, la lista del juego (<i>License number, Team, First name…</i>) o la tuya. La app reconoce cada columna sola.</p>
         <div className="drop-kinds"><span><Icon name="students" size={14} /> Listados → directorio</span><span><Icon name="compare" size={14} /> Informes → clases</span><span><Icon name="key" size={14} /> Contraseñas: se ignoran</span></div>
-        <input ref={input} type="file" hidden multiple accept=".xlsx,.xls,.csv" onChange={(e) => { if (e.target.files) handle(e.target.files); e.target.value = ""; }} />
+        <input ref={input} type="file" hidden multiple accept=".xlsx,.xls,.csv" onChange={(e) => {
+          // la extensión puede dejar aquí el nombre de la clase de Marketplace (data-marketplace-class) antes de cargar el archivo
+          const pista = e.currentTarget.dataset.marketplaceClass ?? "";
+          delete e.currentTarget.dataset.marketplaceClass;
+          if (e.target.files) handle(e.target.files, pista);
+          e.target.value = "";
+        }} />
       </div>
 
       <div className="grid2">
@@ -283,9 +316,13 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
         onSave={async () => {
           try {
             const nueva = g.target === "nueva";
-            await saveGame(g, nueva ? await createFromGame(g) : g.target.slice(6));
+            // doble control: si ya existe una clase con ese nombre, se usa en vez de crear otra igual
+            const iguales = nueva ? snap.clases.filter((c) => normText(c.nombre) === normText(g.nueva.nombre)) : [];
+            if (iguales.length > 1) throw new Error(`Ya hay ${iguales.length} clases llamadas «${g.nueva.nombre.trim()}»: elige una en «Pertenece a».`);
+            const existente = iguales[0];
+            await saveGame(g, existente ? existente.id : nueva ? await createFromGame(g) : g.target.slice(6));
             await refresh();
-            toast(nueva ? `Clase «${g.nueva.nombre.trim()}» creada con su desempeño` : "Desempeño guardado");
+            toast(existente ? `Desempeño agregado a la clase «${existente.nombre}», que ya existía` : nueva ? `Clase «${g.nueva.nombre.trim()}» creada con su desempeño` : "Desempeño guardado");
           } catch (e) { toast(friendlyError(e), "error"); }
         }}
         onClose={() => setGames((gs) => gs.filter((x) => x.key !== g.key))} />)}

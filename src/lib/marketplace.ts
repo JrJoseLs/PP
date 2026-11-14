@@ -23,7 +23,9 @@ export const READY_INFO = { version: 2, acepta: ["competencias", "igrades", "iti
 const MAX_SHEETS = 12, MAX_COLS = 80, MAX_TEXT = 500;
 const MAX_ROWS = 10000;
 
-export interface Payload { requestId: string; filename: string; rows?: unknown[][]; sheets?: Record<string, unknown[][]>; }
+export interface Payload { requestId: string; filename: string; rows?: unknown[][]; sheets?: Record<string, unknown[][]>;
+  /** Opcional: nombre de la clase en Marketplace («jser-MKTJun26»). Solo sugiere el destino. */
+  clase?: string; }
 export type Check = { ok: true; payload: Payload; tipo: "competencias" | "juego"; estudiantes: number } | { ok: false; error: string };
 
 /** Libro del juego: solo texto, números o vacíos, con límites de tamaño */

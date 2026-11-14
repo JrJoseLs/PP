@@ -13,6 +13,10 @@ export interface NuevaClase { nombre: string; grupo: string; periodo: string; de
 export interface GameJob {
   key: string; fileName: string; files: string[]; code: string | null; q: number;
   data: Igrades; target: string; nueva: NuevaClase; saved?: boolean;
+  /** Nombre de la clase en Marketplace que mandó la extensión («jser-MKTJun26»): solo una sugerencia */
+  pista?: string;
+  /** Cuántas clases guardadas se llaman igual que la pista (más de una = el usuario elige) */
+  ambiguo?: number;
 }
 type Est = Pick<Resultado, "nombre" | "matricula" | "equipo" | "grupo">;
 
@@ -114,6 +118,9 @@ export function GameCard({ job, drafts, onTarget, onNueva, onSave, onClose }: {
           <p className="note small">Se crea la clase con sus {plural(jugadores.length, "jugador", "jugadores")} como estudiantes, todavía sin competencias. Cuando subas su informe de competencias (<code>icompetencyreport-{job.code ?? "…"}</code>), elige «Reemplazar datos de» esta clase y se completará la araña.</p>
         </div>
       )}
+      {job.pista && !job.saved && (job.ambiguo
+        ? <p className="note small">Marketplace indica la clase «{job.pista}», pero hay {job.ambiguo} clases con ese nombre: elige cuál en «Pertenece a».</p>
+        : <p className="muted small">Clase indicada por Marketplace: <b>{job.pista}</b>. Revisa que sea correcta antes de guardar.</p>)}
       {yaTiene && !job.saved && (suma
         ? <p className="note small">Esta clase ya tiene {tPrev.length ? `${tPrev.length > 1 ? "los trimestres" : "el trimestre"} ${lista(tPrev)}` : "desempeño"} de este juego: {corte ? `se añade el trimestre ${corte}` : "se actualiza"} y se conserva el historial para comparar trimestres.</p>
         : <p className="note small">Esta clase ya tiene desempeño de otro juego: se reemplazará por el de este archivo.</p>)}
