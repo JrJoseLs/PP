@@ -83,6 +83,36 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
 
   if (N < 3) return <div className="empty-mini">Se necesitan al menos 3 competencias.</div>;
 
+  /* Etiquetas de los ejes sin solaparse: se estima la caja de cada una y, si dos se tocan,
+     se separan en vertical. El lienzo crece lo necesario para que ninguna quede cortada. */
+  const FS = narrow ? 12 : 10.5, LH = FS + 1.8, CW = FS * 0.58;
+  const etiquetas = compact ? [] : labels.map((lab, i) => {
+    const a = ang(i), lx = cx + (R + 16) * Math.cos(a), ly = cy + (R + 16) * Math.sin(a);
+    const anchor: "start" | "end" | "middle" = Math.cos(a) > 0.04 ? "start" : Math.cos(a) < -0.04 ? "end" : "middle";
+    const lines = wrap(metricName(lab) + (risk[i] ? " ↓" : ""), Math.abs(Math.cos(a)) < 0.3 ? 13 : narrow ? 12 : 16);
+    const center = Math.abs(Math.cos(a)) < 0.2 ? 6 : 0;
+    const dy = Math.sin(a) > 0.5 ? 10 + center : Math.sin(a) < -0.5 ? -4 - center - (lines.length - 1) * LH : 4 - (lines.length - 1) * (LH / 2);
+    const w = Math.max(...lines.map((l) => l.length)) * CW;
+    const x0 = anchor === "start" ? lx : anchor === "end" ? lx - w : lx - w / 2;
+    const y = ly + dy;
+    return { i, lab, lx, y, anchor, lines, x0, x1: x0 + w, y0: y - FS * 0.85, y1: y - FS * 0.85 + lines.length * LH };
+  });
+  for (let it = 0; it < 60; it++) {
+    let movido = false;
+    for (let p = 0; p < etiquetas.length; p++) for (let q = p + 1; q < etiquetas.length; q++) {
+      const A = etiquetas[p], B = etiquetas[q];
+      if (A.x0 >= B.x1 + 3 || B.x0 >= A.x1 + 3) continue;
+      const ov = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0) + 2;
+      if (ov <= 0) continue;
+      const [arriba, abajo] = A.y0 + A.y1 <= B.y0 + B.y1 ? [A, B] : [B, A];
+      for (const [e, d] of [[arriba, -ov / 2], [abajo, ov / 2]] as const) { e.y += d; e.y0 += d; e.y1 += d; }
+      movido = true;
+    }
+    if (!movido) break;
+  }
+  const vx = Math.min(0, ...etiquetas.map((e) => e.x0 - 4)), vy = Math.min(0, ...etiquetas.map((e) => e.y0 - 4));
+  const VW = Math.max(W, ...etiquetas.map((e) => e.x1 + 4)) - vx, VH = Math.max(H, ...etiquetas.map((e) => e.y1 + 4)) - vy;
+
   // sector de las competencias de riesgo (contiguas en el informe del juego)
   const rIdx = risk.map((r, i) => (r ? i : -1)).filter((i) => i >= 0);
   const half = Math.PI / N;
@@ -92,7 +122,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
   const onMove = (e: React.PointerEvent) => {
     if (compact) return;
     const box = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-    const sx = ((e.clientX - box.left) / box.width) * W - cx, sy = ((e.clientY - box.top) / box.height) * H - cy;
+    const sx = vx + ((e.clientX - box.left) / box.width) * VW - cx, sy = vy + ((e.clientY - box.top) / box.height) * VH - cy;
     const d = Math.hypot(sx, sy);
     if (d < R * 0.06 || d > R + 90) { setAxis(null); return; }
     let a = Math.atan2(sy, sx) + Math.PI / 2; if (a < 0) a += Math.PI * 2;
@@ -148,7 +178,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
           </button>
         </div>
       )}
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title ?? "Gráfico araña de competencias"} onPointerMove={onMove} onPointerDown={onMove}>
+      <svg ref={svgRef} viewBox={`${vx.toFixed(1)} ${vy.toFixed(1)} ${VW.toFixed(1)} ${VH.toFixed(1)}`} role="img" aria-label={title ?? "Gráfico araña de competencias"} onPointerMove={onMove} onPointerDown={onMove}>
         {invert && !compact && <>
           <polygon points={ring(1)} className="band hi" />
           <polygon points={ring(0.66)} className="band mid" />
@@ -176,18 +206,11 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
           return <text key={k} x={x + 10 * Math.cos(a + Math.PI / 2)} y={y + 10 * Math.sin(a + Math.PI / 2) + 3} className="vlabel" fill={s.color}>{fmt(s.values[axis!.i])}</text>;
         })}
 
-        {!compact && labels.map((lab, i) => {
-          const a = ang(i), lx = cx + (R + 16) * Math.cos(a), ly = cy + (R + 16) * Math.sin(a);
-          const anchor = Math.cos(a) > 0.04 ? "start" : Math.cos(a) < -0.04 ? "end" : "middle";
-          const lines = wrap(metricName(lab) + (risk[i] ? " ↓" : ""), Math.abs(Math.cos(a)) < 0.3 ? 13 : narrow ? 12 : 16);
-          const center = Math.abs(Math.cos(a)) < 0.2 ? 6 : 0;
-          const dy = Math.sin(a) > 0.5 ? 10 + center : Math.sin(a) < -0.5 ? -4 - center - (lines.length - 1) * 12 : 4 - (lines.length - 1) * 6;
-          return (
-            <text key={i} x={lx} y={ly + dy} textAnchor={anchor} className={"axl" + (risk[i] ? " risk" : "") + (axis?.i === i ? " on" : "")}>
-              {lines.map((ln, k) => <tspan key={k} x={lx} dy={k ? 12 : 0}>{ln}</tspan>)}
-            </text>
-          );
-        })}
+        {etiquetas.map(({ i, lx, y, anchor, lines }) => (
+          <text key={i} x={lx} y={y} textAnchor={anchor} className={"axl" + (risk[i] ? " risk" : "") + (axis?.i === i ? " on" : "")}>
+            {lines.map((ln, k) => <tspan key={k} x={lx} dy={k ? LH : 0}>{ln}</tspan>)}
+          </text>
+        ))}
       </svg>
       {tip}
       {!compact && <>
@@ -232,14 +255,15 @@ async function exportPng(svg: SVGSVGElement, series: Series[], name: string) {
   const bg = css.getPropertyValue("--card").trim() || "#fff", ink = css.getPropertyValue("--text").trim() || "#000";
   const resolved = [...svg.querySelectorAll<SVGPolygonElement>(".series > polygon")].map((p) => getComputedStyle(p).stroke);
   const H = vb.height + legendH;
-  clone.setAttribute("viewBox", `0 0 ${vb.width} ${H}`);
+  // el dibujo puede empezar en coordenadas negativas (etiquetas desplazadas): se respeta el origen
+  clone.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.width} ${H}`);
   clone.setAttribute("width", String(vb.width)); clone.setAttribute("height", String(H));
   const ns = "http://www.w3.org/2000/svg";
   const rect = document.createElementNS(ns, "rect");
-  rect.setAttribute("width", "100%"); rect.setAttribute("height", "100%"); rect.setAttribute("fill", bg);
+  rect.setAttribute("x", String(vb.x)); rect.setAttribute("y", String(vb.y)); rect.setAttribute("width", String(vb.width)); rect.setAttribute("height", String(H)); rect.setAttribute("fill", bg);
   clone.insertBefore(rect, clone.firstChild);
   series.forEach((s, k) => {
-    const x = 24 + (k % 2) * (vb.width / 2), y = vb.height + 12 + Math.floor(k / 2) * 22;
+    const x = vb.x + 24 + (k % 2) * (vb.width / 2), y = vb.y + vb.height + 12 + Math.floor(k / 2) * 22;
     const sw = document.createElementNS(ns, "rect");
     sw.setAttribute("x", String(x)); sw.setAttribute("y", String(y)); sw.setAttribute("width", "11"); sw.setAttribute("height", "11"); sw.setAttribute("rx", "2");
     sw.setAttribute("fill", resolved[k] || s.color);

@@ -288,7 +288,7 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
       <h3>Desempeño en el juego</h3>
       <p className="sg-frase">{fraseB}</p>
       <div className="sg-kpis k3">
-        <div className="main"><small>{individual ? "Scorecard acumulado" : "Scorecard acumulado del equipo"}</small><b>{fmt(j.bsc_acum)}</b></div>
+        <div className="sg-main"><small>{individual ? "Scorecard acumulado" : "Scorecard acumulado del equipo"}</small><b>{fmt(j.bsc_acum)}</b></div>
         <div><small>Trimestres jugados</small><b>{ultimoT(j) || "—"}</b></div>
         <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div>
       </div>
@@ -327,7 +327,7 @@ function TrimestreBars({ mine, classRows }: { mine: number[]; classRows: Row[] }
                 <i className="me" style={{ height: (v / max) * 100 + "%" }} />
                 <i style={{ height: ((prom[k] ?? 0) / max) * 100 + "%" }} />
               </div>
-              <b>{fmtMin(v)}</b><small>T{k + 1} · acum. {fmtMin(acum)}</small>
+              <b>{fmtMin(v)}</b><small className="trim-t">T{k + 1}</small><small>acum. {fmtMin(acum)}</small>
             </div>
           );
         })}

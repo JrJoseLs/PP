@@ -153,7 +153,16 @@ option:checked { background-color: var(--accent); color: #fff; }
 .switch:checked::after { transform: translateX(15px); }
 
 /* Control segmentado */
-.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 2px; border-radius: 10px; background: var(--fill-2); isolation: isolate; }
+.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 2px; border-radius: 10px; background: var(--fill-2); isolation: isolate; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+/* en móvil, si no caben, los botones bajan a otra línea (sin cortar ninguno) */
+@media (max-width: 480px) {
+  .seg { display: flex; flex-wrap: wrap; overflow: visible; }
+  .seg .seg-thumb { display: none; }
+  .seg button { flex: 1 1 auto; padding: 0 10px; }
+  .seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
+  :root[data-theme="dark"] .seg button.on { background: #636366; }
+}
 .seg button { position: relative; z-index: 1; border: 0; background: transparent; height: 30px; padding: 0 14px; font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer; white-space: nowrap; border-radius: 8px; transition: color .2s; }
 .seg button.on { color: var(--text); }
 .seg-thumb { position: absolute; z-index: 0; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / var(--n)); transform: translateX(calc(100% * var(--i))); border-radius: 8px; background: var(--card); box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 1px rgba(0, 0, 0, .04); transition: transform .3s var(--ease); }
@@ -1033,12 +1042,14 @@ button.ms { cursor: pointer; }
 .gc-nueva .title-input { font-size: 17px; }
 .sg-trim { margin: 0 0 14px; }
 .trim-cols { display: flex; gap: 10px; align-items: flex-end; overflow-x: auto; padding-bottom: 2px; }
-.trim { flex: 1 0 72px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.trim { flex: 1 0 96px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .trim-bars { height: 90px; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 4px; border-bottom: 1px solid var(--sep); }
 .trim-bars i { width: 16px; border-radius: 4px 4px 0 0; background: var(--fill-3); min-height: 2px; transition: height .5s var(--ease); }
 .trim-bars i.me { background: var(--accent); }
 .trim b { font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.trim small { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.trim small { font-size: 10.5px; color: var(--text-3); white-space: nowrap; }
+.trim small.trim-t { font-weight: 700; color: var(--text-2); }
+@media (max-width: 480px) { .radar-tools .muted.tiny.grow { display: none; } .radar-tools { justify-content: space-between; } }
 .qlines svg { width: 100%; height: auto; display: block; }
 .qlines .gl { stroke: var(--sep); }
 .qlines .tk { font-size: 10.5px; fill: var(--text-3); }
@@ -1073,15 +1084,16 @@ button.ms { cursor: pointer; }
 .sgame.partial { border-left: 3px solid var(--warn); }
 .sg-kpis b.sm { font-size: 15px; }
 .mcard .cargo { color: var(--accent); font-weight: 600; }
-.sg-kpis > div.main { background: color-mix(in srgb, var(--accent) 12%, var(--fill-1)); }
-.sg-kpis > div.main b { color: var(--accent); }
+.sg-kpis > div.sg-main { background: color-mix(in srgb, var(--accent) 12%, var(--fill-1)); }
+.sg-kpis > div.sg-main b { color: var(--accent); }
 .sgt .sc-main { font-size: 15px; }
 .niveles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 14px; }
 .niveles > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); font-size: 13px; }
 .niveles small { color: var(--text-3); font-size: 12px; }
 .cargo-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .cargo-row { display: grid; grid-template-columns: 1fr 170px 90px 34px; gap: 8px; align-items: center; }
-.cargo-row input, .cargo-row select { height: 36px; }
+.cargo-row input, .cargo-row select { height: 36px; width: 100%; }
+.cargo-row > * { min-width: 0; }
 @media (max-width: 640px) { .niveles { grid-template-columns: 1fr; } .cargo-row { grid-template-columns: 1fr 1fr 34px; } .cargo-row > .muted { display: none; } }
 .ccard-score { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .ccard-score small { font-size: 10.5px; font-weight: 700; color: var(--text-3); letter-spacing: .04em; }
