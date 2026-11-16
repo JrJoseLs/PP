@@ -129,7 +129,7 @@ export default function Comparar() {
             {porIndice.length > 5 && <button onClick={() => pick(porIndice.slice(-5).reverse().map((x) => x.g.id))}><Icon name="arrowDown" size={12} /> 5 más bajos</button>}
             {nuevos > 0 && <button onClick={() => pick([])}>Ninguno</button>}
             <span className="grow" />
-            <button className="ord" onClick={() => setOrden(orden === "indice" ? "nombre" : "indice")} title="Cambiar orden">{orden === "indice" ? "Por CRR" : "A–Z"}</button>
+            <button className="ord" onClick={() => setOrden(orden === "indice" ? "nombre" : "indice")} title="Cambiar orden">{orden === "indice" ? "Por índice" : "A–Z"}</button>
           </div>
           <div className="pick-list">
             {lista.map(({ g, idx }) => {

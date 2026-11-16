@@ -210,8 +210,8 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
           })}
         </div>
         <p className="radar-note">{invert
-          ? <>Las competencias de riesgo (↓, en rojo) están invertidas: estar más afuera significa menos riesgo. <i className="key lo" /> nivel bajo · <i className="key hi" /> nivel alto. El número de cada serie es su CRR.</>
-          : <>Escala original: en las competencias de riesgo (↓, en rojo) un valor más alto es peor. El número de cada serie es su CRR.</>}</p>
+          ? <>Las competencias de riesgo (↓, en rojo) están invertidas: estar más afuera significa menos riesgo. <i className="key lo" /> nivel bajo · <i className="key hi" /> nivel alto. El número de cada serie es su índice general.</>
+          : <>Escala original: en las competencias de riesgo (↓, en rojo) un valor más alto es peor. El número de cada serie es su índice general.</>}</p>
       </>}
     </div>
   );

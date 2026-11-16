@@ -10,7 +10,7 @@ import { Icon, Segmented } from "./ui";
 
 export type EjeY = "indice" | "bsc_acum";
 const EJE: Record<EjeY, { label: string; corto: string; get(r: Row): number | null }> = {
-  indice: { label: "CRR (competencias del radar)", corto: "CRR", get: (r) => r.indice },
+  indice: { label: "Índice de competencias", corto: "índice", get: (r) => r.indice },
   bsc_acum: { label: "Scorecard acumulado del equipo", corto: "Scorecard", get: (r) => r.juego?.bsc_acum ?? null },
 };
 /* Un color distinto por equipo: la paleta de la app y, si hay más equipos que colores, tonos repartidos por ángulo áureo. */
@@ -71,7 +71,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus, in
     <div className="tscatter">
       <div className="card-h">
         {rows.some((r) => r.indice !== null)
-          ? <Segmented size="sm" value={eje} onChange={setEje} options={[{ value: "bsc_acum", label: "Scorecard" }, { value: "indice", label: "CRR" }]} />
+          ? <Segmented size="sm" value={eje} onChange={setEje} options={[{ value: "bsc_acum", label: "Scorecard" }, { value: "indice", label: "Competencias" }]} />
           : <span className="muted small">Eje vertical: <b>Scorecard acumulado</b></span>}
         {relacion && <span className="muted small">Relación tiempo–{EJE[eje].corto}: <b>{relacion}</b> (r = {r!.toFixed(2)})</span>}
       </div>
@@ -160,7 +160,7 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
                   <button type="button" key={r.r.id} className="tbm" onClick={() => onPick?.(r)}>
                     <span className="tbm-n">{displayName(r.r.nombre)}</span>
                     <span className="tb-bar time"><i style={{ width: ((r.juego?.minutos ?? 0) / maxMin) * 100 + "%", background: colors.get(e.equipo), opacity: .7 }} /><small>{fmtMin(r.juego?.minutos ?? null)}</small></span>
-                    {conComp ? <span className="num"><small className="muted">CRR</small> <b>{fmt(r.indice)}</b></span> : <span />}
+                    {conComp ? <span className="num"><small className="muted">índice</small> <b>{fmt(r.indice)}</b></span> : <span />}
                   </button>
                 ))}
                 <p className="muted tiny">Total del equipo: {fmtMin(e.minutos)}{e.trimestres ? ` · ${e.trimestres} trimestres` : ""}. Toca un integrante para abrir su ficha.</p>
@@ -205,7 +205,7 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
       </div>
       <div className="table-scroll sgt-scroll">
         <table className="etable sgt">
-          <thead><tr>{th("nombre", "Estudiante")}{th("bsc", "Scorecard acumulado", "num")}{th("minutos", "Tiempo en el juego")}{conComp && <>{th("indice", "CRR", "num")}<th>Perfil</th></>}</tr></thead>
+          <thead><tr>{th("nombre", "Estudiante")}{th("bsc", "Scorecard acumulado", "num")}{th("minutos", "Tiempo en el juego")}{conComp && <>{th("indice", "Competencias", "num")}<th>Perfil</th></>}</tr></thead>
           <tbody>
             {lista.map((r) => {
               const m = r.juego?.minutos ?? null, p = perfil(r);
