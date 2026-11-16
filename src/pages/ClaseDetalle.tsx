@@ -71,14 +71,14 @@ export default function ClaseDetalle() {
       {c.metrics.length < 3 && (
         <section className="card pad note-card">
           <h3><Icon name="alert" size={17} /> Falta el informe de competencias</h3>
-          <p className="muted">Esta clase solo tiene el desempeño del juego, así que aún no hay índice ni radar. {rol === "admin"
+          <p className="muted">Esta clase solo tiene el desempeño del juego, así que aún no hay CRR ni radar. {rol === "admin"
             ? <>Sube su <b>Informe de Preparación Profesional</b> en <Link to="/importar">Importar</Link> y elige «Reemplazar datos de «{c.nombre}»»: el desempeño del juego se conserva.</>
             : "Cuando administración suba su informe de competencias aparecerán aquí."}</p>
         </section>
       )}
 
       {c.metrics.length >= 3 && <div className="stats">
-        <Stat label="Índice de la clase" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>}
+        <Stat label="CRR de la clase" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>}
           sub={d.sd !== null ? `Dispersión ±${fmt(d.sd)}` : undefined} />
         <Stat label="Estudiantes" value={d.rr.length} sub={plural(d.carreras.length, "carrera", "carreras")} />
         <Stat label="Nivel alto" value={d.lv.alto} tone="good" sub={d.lv.total ? Math.round((d.lv.alto / d.lv.total) * 100) + "% de la clase" : ""} />
