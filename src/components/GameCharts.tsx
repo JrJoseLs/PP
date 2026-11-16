@@ -10,7 +10,7 @@ import { Icon, Segmented } from "./ui";
 
 export type EjeY = "indice" | "bsc_acum";
 const EJE: Record<EjeY, { label: string; corto: string; get(r: Row): number | null }> = {
-  indice: { label: "CRR", corto: "CRR", get: (r) => r.indice },
+  indice: { label: "Índice de competencias", corto: "índice", get: (r) => r.indice },
   bsc_acum: { label: "Scorecard acumulado del equipo", corto: "Scorecard", get: (r) => r.juego?.bsc_acum ?? null },
 };
 /* Un color distinto por equipo: la paleta de la app y, si hay más equipos que colores, tonos repartidos por ángulo áureo. */

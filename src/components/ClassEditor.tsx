@@ -58,7 +58,7 @@ export function EditStudentModal({ row, onClose }: { row: Row; onClose(): void }
           <datalist id="edit-carreras">{snap.carreras.map((x) => <option key={x.codigo} value={x.codigo}>{x.nombre}</option>)}</datalist>
         </div>
         <div className="edit-sum">
-          <span>CRR <b>{fmt(idx)}</b>{row.indice !== null && idx !== null && Math.abs(idx - row.indice) > 0.04 && <small className="muted"> (antes {fmt(row.indice)})</small>}</span>
+          <span>Índice general <b>{fmt(idx)}</b>{row.indice !== null && idx !== null && Math.abs(idx - row.indice) > 0.04 && <small className="muted"> (antes {fmt(row.indice)})</small>}</span>
           {changed > 0 && <span className="ms info"><b>{changed}</b> {changed === 1 ? "competencia cambiada" : "competencias cambiadas"}</span>}
         </div>
         <div className="metric-inputs">
@@ -137,7 +137,7 @@ export function GridEditor({ cls, rows, onDone }: { cls: Clase; rows: Row[]; onD
           <thead><tr>
             <th className="sticky ge-name">Estudiante</th>
             {CAMPOS.slice(1).map(({ k, label }) => <th key={k}>{label}</th>)}
-            <th className="num">CRR</th>
+            <th className="num">Índice</th>
             {cls.metrics.map((m) => <th key={m} className={"vert" + (isRisk(m) ? " risk" : "")} title={metricName(m)}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></th>)}
             <th />
           </tr></thead>

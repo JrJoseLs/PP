@@ -35,7 +35,7 @@ export default function Clases() {
           <label className="search"><Icon name="search" size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar clase o grupo" /></label>
           {ownerOpts.length > 0 && <Select value={owner} onChange={setOwner} allLabel={`Todos los ${low((rol === "admin" ? D() : M()).many)}`}
             options={[...ownerOpts.map((p) => ({ value: p.id, label: p.nombre })), { value: "none", label: `Sin ${low((rol === "admin" ? D() : M()).one)}` }]} />}
-          <Select value={sort} onChange={(v) => setSort(v as typeof sort)} options={[{ value: "nombre", label: "Nombre" }, { value: "indice", label: "Mejor CRR" }, { value: "n", label: "Más estudiantes" }]} />
+          <Select value={sort} onChange={(v) => setSort(v as typeof sort)} options={[{ value: "nombre", label: "Nombre" }, { value: "indice", label: "Mejor índice" }, { value: "n", label: "Más estudiantes" }]} />
         </div>
       )}
       {!snap.clases.length && <Empty icon="classes" title="Sin clases todavía">{rol === "admin" ? <Link className="btn primary" to="/importar">Importar clases</Link> : <p>Cuando te asignen clases aparecerán aquí.</p>}</Empty>}
