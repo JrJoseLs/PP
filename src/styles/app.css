@@ -1109,10 +1109,11 @@ button.ms { cursor: pointer; }
 .ccard-game span { font-size: 12.5px; }
 .ccard-game em { margin-top: 6px; font-style: normal; font-size: 11.5px; color: var(--warn-ink); }
 .ccard-roles { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--sep); }
-.ccard-roles > div { display: grid; grid-template-columns: minmax(84px, auto) 1fr; gap: 8px; align-items: center; font-size: 12.5px; }
+.ccard-roles > div { display: grid; grid-template-columns: 1fr; gap: 3px; font-size: 12.5px; }
 .ccard-roles .lbl { color: var(--text-3); font-size: 11.5px; font-weight: 600; }
 .ccard-roles .who { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.ccard-roles .who > span:last-child { margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccard-roles .who > span:last-child { margin-left: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+.ccard-roles .who > .av, .ccard-roles .who > span:not(:last-child) { flex: none; }
 .ccard-roles .falta { justify-self: start; padding: 2px 8px; border-radius: 980px; font-size: 11.5px; font-weight: 600; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink); }
 .note-card { border-left: 3px solid var(--warn); }
 .note-card h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }

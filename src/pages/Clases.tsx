@@ -57,10 +57,10 @@ export default function Clases() {
               <div className="ccard-top">
                 {conComp
                   ? <><div className="ccard-radar"><Radar compact size={120} labels={c.metrics} series={[{ name: c.nombre, color: c.color, values: vec as number[] }]} /></div>
-                    <div className="ccard-score"><Ring value={idx} size={54} stroke={6} /><small>CRR</small></div></>
-                  : <div className="ccard-game">
+                    <Ring value={idx} size={54} stroke={6} /></>
+                  : <div className="ccard-game" title="Scorecard acumulado: la nota global de cada empresa en el simulador (Tarjeta de puntuación integral), promediada en todos los trimestres. Más alto es mejor. Aquí se muestra el promedio de quienes completaron la simulación.">
                     <small>{juego ? "Solo desempeño del juego" : "Sin datos todavía"}</small>
-                    {juego && <><b>{fmt(sc)}</b><span>Scorecard acumulado</span><span className="muted">{fmtMin(tiempo)} promedio</span></>}
+                    {juego && <><b>{fmt(sc)}</b><span>Scorecard promedio de la clase</span><span className="muted">{fmtMin(tiempo)} de juego por estudiante</span></>}
                     <em>Falta el informe de competencias</em>
                   </div>}
               </div>

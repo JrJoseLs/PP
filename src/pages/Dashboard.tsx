@@ -77,7 +77,7 @@ export default function Dashboard() {
       {scoped && !rows.length ? <Empty icon="search" title="Nada coincide con estos filtros">Quita alguno de los filtros de arriba.</Empty> : <>
 
       <div className="stats">
-        <Stat label="CRR promedio" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>} sub="Preparación profesional · competencias del radar, 0–100" />
+        <Stat label="CRR promedio" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>} sub="Competencias positivas, 0–100" />
         <Stat label="Estudiantes" value={rows.length} sub={plural(snap.clases.length, "clase", "clases")} />
         <Stat label="Nivel alto" value={d.lv.total ? Math.round((d.lv.alto / d.lv.total) * 100) + "%" : "—"} tone="good" sub={`${d.lv.alto} con CRR ≥ 66`} />
         <Stat label="Necesitan apoyo" value={d.lv.bajo} tone="bad" sub={d.lv.total ? `${Math.round((d.lv.bajo / d.lv.total) * 100)}% con CRR < 34` : ""} />
