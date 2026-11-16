@@ -31,24 +31,35 @@ export function setRoleNames(r?: Partial<RoleNames> | null) {
   roles = { decano: clean(r?.decano, DEFAULT_ROLES.decano), maestro: clean(r?.maestro, DEFAULT_ROLES.maestro) };
 }
 export const roleNames = () => roles;
-/* ---------- Cargos ----------
-   El permiso sigue siendo uno de tres niveles (admin, decano, maestro); el cargo es el nombre que se ve.
-   Los cuatro cargos de nivel «maestro» ven solo las clases que se les asignan. */
-export interface Cargo { label: string; rol: Rol; nota: string; }
-export const CARGOS: Cargo[] = [
-  { label: "Administración", rol: "admin", nota: "Carga clases y gestiona todo" },
-  { label: "Director/Coordinador académico", rol: "decano", nota: "Asigna sus clases a su equipo" },
-  { label: "Docente", rol: "maestro", nota: "Ve las clases que se le asignan" },
-  { label: "Docente invitado", rol: "maestro", nota: "Ve las clases que se le asignan" },
-  { label: "Facilitador/Mentor", rol: "maestro", nota: "Ve las clases que se le asignan" },
-  { label: "Investigador", rol: "maestro", nota: "Ve las clases que se le asignan" },
+/* ---------- Cargos y permisos ----------
+   Administración define los cargos (Ajustes) y a qué NIVEL DE ACCESO corresponde cada uno.
+   Los niveles son los permisos reales (los aplica la base de datos); el cargo es el nombre que se ve. */
+export interface Cargo { label: string; rol: Rol; }
+export const NIVELES: Record<Rol, { titulo: string; nota: string }> = {
+  admin: { titulo: "Acceso total", nota: "Carga clases, crea cuentas, define cargos y decide quién ve cada clase" },
+  decano: { titulo: "Gestiona clases", nota: "Ve las clases que administración le asigna y las reparte a su equipo" },
+  maestro: { titulo: "Ve sus clases", nota: "Ve solo las clases que se le asignan" },
+};
+export const CARGOS_BASE: Cargo[] = [
+  { label: "Administración", rol: "admin" },
+  { label: "Director/Coordinador académico", rol: "decano" },
+  { label: "Docente", rol: "maestro" },
+  { label: "Docente invitado", rol: "maestro" },
+  { label: "Facilitador/Mentor", rol: "maestro" },
+  { label: "Investigador", rol: "maestro" },
 ];
-/** Cargo de una persona: el guardado si es válido para su nivel; si no, el nombre del nivel */
-export function cargoDe(p: { rol: Rol; cargo?: string | null }) {
-  return p.cargo && CARGOS.some((c) => c.label === p.cargo && c.rol === p.rol) ? p.cargo : rolLabel(p.rol);
+let cargos: Cargo[] = CARGOS_BASE;
+/** Carga los cargos guardados en Ajustes (si no hay o están mal formados, los de base) */
+export function setCargos(list?: unknown) {
+  const ok = Array.isArray(list) ? list.filter((c): c is Cargo => !!c && typeof c.label === "string" && !!c.label.trim() && ["admin", "decano", "maestro"].includes(c.rol))
+    .map((c) => ({ label: c.label.trim().slice(0, 60), rol: c.rol })) : [];
+  cargos = ok.some((c) => c.rol === "admin") ? ok : CARGOS_BASE;
 }
-/** Nivel por defecto de un cargo */
-export const cargoRol = (label: string): Rol => CARGOS.find((c) => c.label === label)?.rol ?? "maestro";
+export const cargosList = () => cargos;
+/** Cargo de una persona: el guardado; si no tiene, el nombre de su nivel */
+export function cargoDe(p: { rol: Rol; cargo?: string | null }) { return p.cargo?.trim() || rolLabel(p.rol); }
+/** Nivel de acceso de un cargo */
+export const cargoRol = (label: string): Rol => cargos.find((c) => c.label === label)?.rol ?? "maestro";
 
 /** Rol con mayúscula inicial ("Supervisor/a") */
 export const rolLabel = (r: Rol) => (r === "admin" ? "Administración" : roles[r].one);

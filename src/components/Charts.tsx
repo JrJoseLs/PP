@@ -71,7 +71,7 @@ export function Histogram({ rows, color = "var(--accent)" }: { rows: Row[]; colo
   rows.forEach((r) => { if (r.indice !== null) bins[Math.min(9, Math.floor(r.indice / 10))]++; });
   const max = Math.max(1, ...bins);
   return (
-    <div className="histo" role="img" aria-label="Distribución del índice general">
+    <div className="histo" role="img" aria-label="Distribución del CRR">
       {bins.map((n, i) => (
         <div key={i} className="histo-col" title={`${i * 10}–${i * 10 + 9}: ${n} estudiantes`}>
           <span style={{ height: (n / max) * 100 + "%", background: i < 3 ? "var(--bad)" : i >= 7 ? "var(--good)" : color }} />

@@ -68,17 +68,26 @@ export default function ClaseDetalle() {
           {rol === "admin" && <button className="btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Editar</button>}
         </>} />
 
-      <div className="stats">
-        <Stat label="Índice de la clase" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>}
+      {c.metrics.length < 3 && (
+        <section className="card pad note-card">
+          <h3><Icon name="alert" size={17} /> Falta el informe de competencias</h3>
+          <p className="muted">Esta clase solo tiene el desempeño del juego, así que aún no hay CRR ni radar. {rol === "admin"
+            ? <>Sube su <b>Informe de Preparación Profesional</b> en <Link to="/importar">Importar</Link> y elige «Reemplazar datos de «{c.nombre}»»: el desempeño del juego se conserva.</>
+            : "Cuando administración suba su informe de competencias aparecerán aquí."}</p>
+        </section>
+      )}
+
+      {c.metrics.length >= 3 && <div className="stats">
+        <Stat label="CRR de la clase" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>}
           sub={d.sd !== null ? `Dispersión ±${fmt(d.sd)}` : undefined} />
         <Stat label="Estudiantes" value={d.rr.length} sub={plural(d.carreras.length, "carrera", "carreras")} />
         <Stat label="Nivel alto" value={d.lv.alto} tone="good" sub={d.lv.total ? Math.round((d.lv.alto / d.lv.total) * 100) + "% de la clase" : ""} />
         <Stat label="Necesitan apoyo" value={d.lv.bajo} tone="bad" sub={d.lv.total ? Math.round((d.lv.bajo / d.lv.total) * 100) + "% de la clase" : ""} />
-      </div>
+      </div>}
 
       {rol !== "maestro" && <Access c={c} />}
 
-      <div className="grid-main">
+      {c.metrics.length >= 3 && <div className="grid-main">
         <section className="card pad">
           <div className="card-h">
             <h3>Perfil de la clase</h3>
@@ -96,7 +105,7 @@ export default function ClaseDetalle() {
           <h4 className="sub-h">Distribución</h4>
           <Histogram rows={d.rr} color={c.color} />
         </section>
-      </div>
+      </div>}
 
       {([["Por carrera", d.carreras], ["Por equipo del juego", d.equipos]] as const).map(([titulo, gs]) => gs.length > 1 && c.metrics.length > 0 && gs.some((g) => g.rows.length > 1) && (
         <section className="card pad" key={titulo}>
@@ -142,7 +151,7 @@ export default function ClaseDetalle() {
             ? <button className="btn sm" onClick={() => setGrid(true)}><Icon name="edit" size={14} /> Editar en tabla</button>
             : <span className="muted small">Toca a un estudiante para ver su perfil</span>}</div>
         {grid ? <GridEditor cls={c} rows={d.rr} onDone={() => setGrid(false)} /> : <div className="stable">
-          <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "Índice")}<span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
+          <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "CRR")}<span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
           {sorted.map((r) => <StudentRow key={r.r.id} r={r} onOpen={() => openStudent(r.r.id, sorted.map((x) => x.r.id))} />)}
         </div>}
       </section>

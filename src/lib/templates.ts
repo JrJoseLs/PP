@@ -40,7 +40,7 @@ function reportInstructions(metrics: string[]): Cell[][] {
     ["6", "Las filas que empiezan por «EJEMPLO» se ignoran: bórralas o déjalas."],
     ["7", "Guarda el archivo con el nombre de la clase (ej. «Gestión de Proyectos.xlsx») y súbelo en Importar."],
     [],
-    ["Competencias de riesgo (un valor más BAJO es mejor; no cuentan en el índice general):"],
+    ["Competencias de riesgo (un valor más BAJO es mejor; no cuentan en el CRR):"],
     ...metrics.filter(isRisk).map((m) => ["", m] as Cell[]),
   ];
 }

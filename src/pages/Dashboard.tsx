@@ -77,10 +77,10 @@ export default function Dashboard() {
       {scoped && !rows.length ? <Empty icon="search" title="Nada coincide con estos filtros">Quita alguno de los filtros de arriba.</Empty> : <>
 
       <div className="stats">
-        <Stat label="Índice promedio" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>} sub="Competencias positivas, 0–100" />
+        <Stat label="CRR promedio" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>} sub="Preparación profesional · competencias del radar, 0–100" />
         <Stat label="Estudiantes" value={rows.length} sub={plural(snap.clases.length, "clase", "clases")} />
-        <Stat label="Nivel alto" value={d.lv.total ? Math.round((d.lv.alto / d.lv.total) * 100) + "%" : "—"} tone="good" sub={`${d.lv.alto} con índice ≥ 66`} />
-        <Stat label="Necesitan apoyo" value={d.lv.bajo} tone="bad" sub={d.lv.total ? `${Math.round((d.lv.bajo / d.lv.total) * 100)}% con índice < 34` : ""} />
+        <Stat label="Nivel alto" value={d.lv.total ? Math.round((d.lv.alto / d.lv.total) * 100) + "%" : "—"} tone="good" sub={`${d.lv.alto} con CRR ≥ 66`} />
+        <Stat label="Necesitan apoyo" value={d.lv.bajo} tone="bad" sub={d.lv.total ? `${Math.round((d.lv.bajo / d.lv.total) * 100)}% con CRR < 34` : ""} />
       </div>
 
       <div className="grid-main">
@@ -105,7 +105,7 @@ export default function Dashboard() {
               <div>{it.text}{it.to && <button className="link" onClick={() => go(it.to!)}>{it.cta ?? "Ver"} <Icon name="chevron" size={12} /></button>}</div>
             </li>))}</ul>
           <div className="mt">
-            <h4 className="sub-h">Distribución del índice</h4>
+            <h4 className="sub-h">Distribución del CRR</h4>
             <Histogram rows={rows} />
             <LevelBar rows={rows} showLabels height={10} />
           </div>
@@ -148,7 +148,7 @@ function RankCard({ title, items, onPick, avatar, empty }: { title: string; item
   const sorted = [...items].sort((a, b) => (b.indice ?? -1) - (a.indice ?? -1));
   return (
     <section className="card pad">
-      <div className="card-h"><h3>{title}</h3><span className="muted small">por índice promedio</span></div>
+      <div className="card-h"><h3>{title}</h3><span className="muted small">por CRR promedio</span></div>
       {!sorted.length && <p className="muted">{empty}</p>}
       <ol className="rank">
         {sorted.map((g, i) => (
@@ -170,7 +170,7 @@ function RankCard({ title, items, onPick, avatar, empty }: { title: string; item
 function AttentionCard({ rows, onPick }: { rows: Row[]; onPick(r: Row): void }) {
   return (
     <section className="card pad">
-      <div className="card-h"><h3>Necesitan apoyo</h3><span className="muted small">{rows.length} con índice &lt; 34</span></div>
+      <div className="card-h"><h3>Necesitan apoyo</h3><span className="muted small">{rows.length} con CRR &lt; 34</span></div>
       {!rows.length ? <p className="muted">Nadie por debajo de 34. Buen trabajo.</p> : (
         <ul className="people">
           {rows.slice(0, 8).map((r) => (
@@ -203,7 +203,7 @@ function buildInsights(d: { classes: Sum[]; maestros: Sum[]; overall: (number | 
   }
   if (cls.length > 1) {
     const s = [...cls].sort((a, b) => b.indice! - a.indice!);
-    out.push({ tone: "good", text: <><b>{s[0].label}</b> lidera con índice <b>{fmt(s[0].indice)}</b>, {fmt(s[0].indice! - s[s.length - 1].indice!)} puntos sobre <b>{s[s.length - 1].label}</b>.</>, to: `/comparar?add=${encodeURIComponent(s[0].id)},${encodeURIComponent(s[s.length - 1].id)}`, cta: "Comparar" });
+    out.push({ tone: "good", text: <><b>{s[0].label}</b> lidera con CRR <b>{fmt(s[0].indice)}</b>, {fmt(s[0].indice! - s[s.length - 1].indice!)} puntos sobre <b>{s[s.length - 1].label}</b>.</>, to: `/comparar?add=${encodeURIComponent(s[0].id)},${encodeURIComponent(s[s.length - 1].id)}`, cta: "Comparar" });
     // competencia con mayor brecha entre clases
     let best: { m: string; gap: number; hi: Sum; lo: Sum } | null = null;
     metrics.forEach((m, i) => {

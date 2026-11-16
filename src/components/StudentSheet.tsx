@@ -3,7 +3,7 @@ import { useApp, usePref } from "../data/store";
 import { Avatar, Delta, Icon, LevelChip, Segmented, Sheet } from "./ui";
 import { Radar, type Series } from "./Radar";
 import { Ring } from "./Charts";
-import { SIN_CARRERA, avgVector, displayName, fmt, isRisk, metricValue, personKey, sparseMetrics } from "../lib/metrics";
+import { SIN_CARRERA, avgVector, displayName, fmt, isRisk, mean, metricValue, personKey, sparseMetrics, type Row } from "../lib/metrics";
 import { metricDesc, metricName } from "../lib/labels";
 import { EditStudentModal } from "./ClassEditor";
 import { StudentGame, StudentGamePartial } from "./GameCharts";
@@ -33,15 +33,19 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
     const pos = deltas.filter((x) => !isRisk(x.name)).sort((a, b) => b.d - a.d);
     const riskHigh = deltas.filter((x) => isRisk(x.name) && x.v >= 50).sort((a, b) => b.v - a.v);
     const others = rows.filter((r) => r !== row && personKey(r.r) === personKey(row.r));
-    return { m, classRows, carRows, conCarrera, mismaGente, clsAvg, carAvg, rank, total: ranked.length, pos, riskHigh, deltas, others };
+    // el radar muestra las mismas competencias que cuentan en el CRR (sin las casi vacías de la clase)
+    const labels = m.filter((x) => !sparse.has(x));
+    return { m, labels, sparse, classRows, carRows, conCarrera, mismaGente, clsAvg, carAvg, rank, total: ranked.length, pos, riskHigh, deltas, others };
   }, [row, rows, rowsByClase]);
 
   if (!row || !data) return null;
   const idx = list.indexOf(id);
-  const series: Series[] = [{ name: displayName(row.r.nombre).split(" ").slice(0, 2).join(" "), color: row.cls.color, values: row.r.valores }];
+  const pick = (v: (number | null)[]) => data.labels.map((x) => v[data.m.indexOf(x)]) as number[];
+  const crr = (rr: Row[]) => mean(rr.map((x) => x.indice));
+  const series: Series[] = [{ name: displayName(row.r.nombre).split(" ").slice(0, 2).join(" "), color: row.cls.color, values: pick(row.r.valores), index: row.indice }];
   const modo = data.conCarrera ? vs : "clase";
-  if (modo !== "carrera") series.push({ name: "Promedio de la clase", color: "var(--text-3)", values: data.clsAvg as number[], dash: true, muted: true });
-  if (modo !== "clase") series.push({ name: `Promedio de ${row.carrera} (${data.carRows.length})`, color: "var(--accent-2)", values: data.carAvg as number[], dash: true, muted: true });
+  if (modo !== "carrera") series.push({ name: "Promedio de la clase", color: "var(--text-3)", values: pick(data.clsAvg), dash: true, muted: true, index: crr(data.classRows) });
+  if (modo !== "clase") series.push({ name: `Promedio de ${row.carrera} (${data.carRows.length})`, color: "var(--accent-2)", values: pick(data.carAvg), dash: true, muted: true, index: crr(data.carRows) });
   const pct = data.total > 1 ? Math.round((1 - (data.rank - 1) / (data.total - 1)) * 100) : null;
 
   return (
@@ -85,7 +89,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         </div>
         {!data.conCarrera && <p className="muted small">Este estudiante no tiene carrera asignada, así que no se puede comparar con su carrera. Asígnala con <b>Editar</b> o subiendo el directorio.</p>}
         {data.conCarrera && data.mismaGente && modo !== "clase" && <p className="muted small">Todos los de {row.carrera} están en esta clase: el promedio de la carrera coincide con el de la clase y las dos líneas se superponen.</p>}
-        <Radar labels={data.m} series={series} size={520} invert={invert} onInvert={setInvert} />
+        <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} />
       </div>
 
       <div className="grid2">

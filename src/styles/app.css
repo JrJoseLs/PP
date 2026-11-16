@@ -1073,6 +1073,31 @@ button.ms { cursor: pointer; }
 .sgame.partial { border-left: 3px solid var(--warn); }
 .sg-kpis b.sm { font-size: 15px; }
 .mcard .cargo { color: var(--accent); font-weight: 600; }
+.sg-kpis > div.main { background: color-mix(in srgb, var(--accent) 12%, var(--fill-1)); }
+.sg-kpis > div.main b { color: var(--accent); }
+.sgt .sc-main { font-size: 15px; }
+.niveles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 14px; }
+.niveles > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); font-size: 13px; }
+.niveles small { color: var(--text-3); font-size: 12px; }
+.cargo-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.cargo-row { display: grid; grid-template-columns: 1fr 170px 90px 34px; gap: 8px; align-items: center; }
+.cargo-row input, .cargo-row select { height: 36px; }
+@media (max-width: 640px) { .niveles { grid-template-columns: 1fr; } .cargo-row { grid-template-columns: 1fr 1fr 34px; } .cargo-row > .muted { display: none; } }
+.ccard-score { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ccard-score small { font-size: 10.5px; font-weight: 700; color: var(--text-3); letter-spacing: .04em; }
+.ccard-game { flex: 1; min-height: 120px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); }
+.ccard-game small { font-size: 11.5px; color: var(--text-3); font-weight: 600; }
+.ccard-game b { font: 700 28px var(--font-d); color: var(--c, var(--accent)); line-height: 1.1; }
+.ccard-game span { font-size: 12.5px; }
+.ccard-game em { margin-top: 6px; font-style: normal; font-size: 11.5px; color: var(--warn-ink); }
+.ccard-roles { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--sep); }
+.ccard-roles > div { display: grid; grid-template-columns: minmax(84px, auto) 1fr; gap: 8px; align-items: center; font-size: 12.5px; }
+.ccard-roles .lbl { color: var(--text-3); font-size: 11.5px; font-weight: 600; }
+.ccard-roles .who { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ccard-roles .who > span:last-child { margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccard-roles .falta { justify-self: start; padding: 2px 8px; border-radius: 980px; font-size: 11.5px; font-weight: 600; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink); }
+.note-card { border-left: 3px solid var(--warn); }
+.note-card h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }

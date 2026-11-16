@@ -3,8 +3,8 @@ import type { Api } from "./api";
 import { createApi, friendlyError } from "./api";
 import type { Clase, Desempeno, DesempenoEquipo, Profile, Snapshot } from "../lib/types";
 import { linkJugadores, ultimoT } from "../lib/game";
-import { SIN_CARRERA, SIN_GRUPO, generalIndex, normText, unionMetrics, type Row } from "../lib/metrics";
-import { setMetricNames, setRoleNames, type RoleNames } from "../lib/labels";
+import { SIN_CARRERA, SIN_GRUPO, generalIndex, normText, unionMetrics, vaciasDe, type Row } from "../lib/metrics";
+import { setCargos, setMetricNames, setRoleNames, type RoleNames } from "../lib/labels";
 
 /** Jugador que queda fuera de los gráficos: no completó la simulación o no está en el informe de competencias */
 export interface Incompleto { d: Desempeno; motivo: "trimestres" | "sin_informe"; hasta: number; row?: Row; }
@@ -93,15 +93,20 @@ export function AppProvider({ children, onToasts }: { children: ReactNode; onToa
   const derived = useMemo(() => {
     // nombres visibles configurados por administración (se aplican antes de dibujar)
     setRoleNames(snap.ajustes.roles as Partial<RoleNames> | undefined);
+    setCargos(snap.ajustes.cargos);
     setMetricNames(snap.ajustes.competencias);
     const carreraMap = new Map(snap.carreras.map((c) => [c.codigo, c.nombre]));
     const carreraName = (code: string) => (code ? carreraMap.get(code) || code : SIN_CARRERA);
     const clsMap = new Map(snap.clases.map((c) => [c.id, c]));
     const rows: Row[] = [];
     const rowsByClase = new Map<string, Row[]>();
+    // competencias casi vacías de cada clase: no cuentan en el CRR (igual que no se dibujan en el radar)
+    const valsPorClase = new Map<string, number[][]>();
+    snap.resultados.forEach((r) => { if (!valsPorClase.has(r.clase_id)) valsPorClase.set(r.clase_id, []); valsPorClase.get(r.clase_id)!.push(r.valores); });
+    const vacias = new Map(snap.clases.map((c) => [c.id, vaciasDe(c.metrics, valsPorClase.get(c.id) ?? [])]));
     for (const r of snap.resultados) {
       const cls = clsMap.get(r.clase_id); if (!cls) continue;
-      const row: Row = { r, cls, indice: generalIndex(cls.metrics, r.valores), carrera: carreraName(r.carrera),
+      const row: Row = { r, cls, indice: generalIndex(cls.metrics, r.valores, vacias.get(cls.id)), carrera: carreraName(r.carrera),
         grupo: r.grupo || cls.grupo || SIN_GRUPO, equipo: r.equipo || "",
         q: normText(r.nombre + " " + r.matricula + " " + r.grupo + " " + (r.equipo ?? "") + " " + cls.nombre) };
       rows.push(row);

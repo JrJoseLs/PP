@@ -27,8 +27,17 @@ export function stdev(arr: number[]): number | null {
   return Math.sqrt(arr.reduce((a, v) => a + (v - m) ** 2, 0) / (arr.length - 1));
 }
 
-export function generalIndex(metrics: string[], valores: number[]): number | null {
-  return mean(metrics.map((m, i) => (isRisk(m) ? null : valores[i])));
+/** CRR (índice de preparación profesional): promedio de las competencias POSITIVAS que se ven en el radar.
+    No entran las de riesgo (↓) ni las casi vacías de la clase (`excluir`, p. ej. «Superación» en 0 para casi todos). */
+export function generalIndex(metrics: string[], valores: number[], excluir?: Set<string>): number | null {
+  return mean(metrics.map((m, i) => (isRisk(m) || excluir?.has(m) ? null : valores[i])));
+}
+/** Competencias casi vacías de una clase (≥ 70 % de los estudiantes en 0): no se dibujan en el radar ni cuentan en el CRR */
+export function vaciasDe(metrics: string[], valores: number[][]): Set<string> {
+  return new Set(metrics.filter((_, i) => {
+    const v = valores.map((x) => x[i]).filter((x) => typeof x === "number");
+    return v.length > 0 && v.filter((x) => x === 0).length / v.length >= 0.7;
+  }));
 }
 
 export interface Level { id: "bajo" | "medio" | "alto"; label: string; min: number; max: number; }

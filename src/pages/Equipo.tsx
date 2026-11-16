@@ -5,7 +5,7 @@ import { Avatar, Empty, Icon, Modal, Segmented } from "../components/ui";
 import { LevelBar } from "../components/Charts";
 import { avgIndex, fmt, plural } from "../lib/metrics";
 import type { Profile, Rol } from "../lib/types";
-import { CARGOS, D, M, cargoDe, cargoRol, low, rolLabel } from "../lib/labels";
+import { D, M, NIVELES, cargoDe, cargoRol, cargosList, low, rolLabel } from "../lib/labels";
 import { PageHead } from "./Dashboard";
 import { downloadAccountsTemplate, downloadCredentials, parseAccounts, type AccountRow } from "../lib/templates";
 
@@ -208,7 +208,7 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
   const { user, snap, run, api } = useApp();
   const isAdmin = user!.rol === "admin";
   const [f, setF] = useState({ nombre: p?.nombre ?? "", usuario: p?.usuario ?? "", password: p ? "" : genPass(),
-    rol: (p?.rol ?? "maestro") as Rol, cargo: p ? cargoDe(p) : "Docente", decano_id: p ? p.decano_id : isAdmin ? decanoFor : user!.id, activo: p?.activo ?? true });
+    rol: (p?.rol ?? "maestro") as Rol, cargo: p ? cargoDe(p) : (cargosList().find((c) => c.rol === "maestro")?.label ?? M().one), decano_id: p ? p.decano_id : isAdmin ? decanoFor : user!.id, activo: p?.activo ?? true });
   const [touchedUser, setTouchedUser] = useState(!!p);
   const [created, setCreated] = useState<{ usuario: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -254,9 +254,10 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
         {!self && (
           <label className="field"><span>Cargo</span>
             <select value={f.cargo} onChange={(e) => setF({ ...f, cargo: e.target.value, rol: cargoRol(e.target.value) })}>
-              {CARGOS.filter((c) => isAdmin || c.rol === "maestro").map((c) => <option key={c.label} value={c.label}>{c.label}</option>)}
+              {cargosList().filter((c) => isAdmin || c.rol === "maestro").map((c) => <option key={c.label} value={c.label}>{c.label}</option>)}
+              {!cargosList().some((c) => c.label === f.cargo) && <option value={f.cargo}>{f.cargo}</option>}
             </select>
-            <small className="muted">{CARGOS.find((c) => c.label === f.cargo)?.nota}</small></label>
+            <small className="muted">{NIVELES[f.rol].titulo}: {NIVELES[f.rol].nota.toLowerCase()}. Los cargos se definen en Ajustes.</small></label>
         )}
         {isAdmin && f.rol === "maestro" && (
           <label className="field"><span>{D().one} a cargo</span>

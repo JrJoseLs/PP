@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useApp } from "../data/store";
 import { Avatar, Icon, Segmented } from "../components/ui";
 import { useTheme, type ThemePref } from "../components/Theme";
-import { D, M, ROLE_PRESETS, low, metricDefaultName, metricDesc, metricOverridesRaw, roleNames, cargoDe, type RoleNames } from "../lib/labels";
+import { NIVELES, ROLE_PRESETS, cargoDe, cargosList, low, metricDefaultName, metricDesc, metricOverridesRaw, roleNames, type RoleNames } from "../lib/labels";
+import type { Profile, Rol } from "../lib/types";
 import { METRICS_FALLBACK, isRisk, normText } from "../lib/metrics";
 import { cloudConfigured } from "../data/api";
 import { PageHead } from "./Dashboard";
@@ -44,15 +45,16 @@ export default function Ajustes() {
           </form>
         </section>
 
+        {user!.rol === "admin" && <CargosEditor />}
         {user!.rol === "admin" && <RoleNamesEditor />}
         {user!.rol === "admin" && <MetricNamesEditor />}
 
         <section className="card pad">
-          <h3>Qué puede ver cada rol</h3>
+          <h3>Qué puede ver cada cargo</h3>
           <ul className="roles">
-            <li><b>Administración</b> carga las clases desde Excel, crea cuentas y entrega cada clase a uno o más {low(D().many)}.</li>
-            <li><b>{D().one}</b> ve solo las clases que se le entregaron y solo a sus {low(M().many)}. Decide qué clase ve cada uno y compara clases, personas y carreras.</li>
-            <li><b>{M().one}</b> ve solo las clases que su {low(D().one)} le asignó: sus estudiantes, perfiles y comparaciones dentro de ellas.</li>
+            {(["admin", "decano", "maestro"] as Rol[]).map((rr) => (
+              <li key={rr}><b>{cargosList().filter((c) => c.rol === rr).map((c) => c.label).join(" · ") || NIVELES[rr].titulo}</b>: {NIVELES[rr].nota.toLowerCase()}.</li>
+            ))}
           </ul>
           <p className="muted small">{api.mode === "cloud" ? "Estas reglas se aplican en el servidor (Row Level Security de Postgres): la base de datos no entrega información fuera de tu alcance." : "En modo demo las mismas reglas se simulan en tu navegador."}</p>
         </section>
@@ -84,7 +86,80 @@ export default function Ajustes() {
   );
 }
 
-/* ---------- Nombres de los roles (solo administración) ---------- */
+
+/* ---------- Cargos y permisos (solo administración) ----------
+   Cada cargo es un nombre visible + un nivel de acceso. Al renombrar o cambiar el nivel de un cargo,
+   se actualiza a las personas que lo tienen (su permiso real cambia con el nivel). */
+function CargosEditor() {
+  const { run, snap, user, api, refresh, toast } = useApp();
+  type Fila = { label: string; rol: Rol; orig?: string; origRol?: Rol };
+  const [f, setF] = useState<Fila[]>(() => cargosList().map((c) => ({ ...c, orig: c.label, origRol: c.rol })));
+  const [busy, setBusy] = useState(false);
+  const usan = (label?: string) => (label ? snap.profiles.filter((p) => cargoDe(p) === label) : []);
+  const dirty = JSON.stringify(f.map(({ label, rol }) => ({ label: label.trim(), rol }))) !== JSON.stringify(cargosList());
+  const nombres = f.map((c) => c.label.trim().toLowerCase());
+  const error = f.some((c) => !c.label.trim()) ? "Hay un cargo sin nombre."
+    : nombres.some((n, i) => nombres.indexOf(n) !== i) ? "Hay dos cargos con el mismo nombre."
+    : !f.some((c) => c.rol === "admin") ? "Debe quedar al menos un cargo con acceso total." : "";
+  const set = (i: number, p: Partial<Fila>) => setF(f.map((c, j) => (j === i ? { ...c, ...p } : c)));
+
+  const save = async () => {
+    setBusy(true);
+    const list = f.map((c) => ({ label: c.label.trim(), rol: c.rol }));
+    const ok = await run((a) => a.setAjuste("cargos", list));
+    if (ok !== false) {
+      // las personas siguen a su cargo: nuevo nombre y, si cambió, nuevo nivel de acceso
+      let n = 0;
+      for (const c of f) {
+        if (!c.orig || (c.orig === c.label.trim() && c.origRol === c.rol)) continue;
+        for (const p of usan(c.orig)) {
+          const patch: Partial<Profile> = { cargo: c.label.trim() };
+          if (p.rol !== c.rol) { patch.rol = c.rol; if (c.rol !== "maestro") patch.decano_id = null; }
+          try { await api.updateProfile(p.id, patch); n++; } catch (e) { toast(`${p.nombre}: ${(e as Error).message}`, "error"); }
+        }
+      }
+      await refresh();
+      toast(`Cargos guardados${n ? ` · ${n} ${n === 1 ? "persona actualizada" : "personas actualizadas"}` : ""}`);
+      setF(cargosList().map((c) => ({ ...c, orig: c.label, origRol: c.rol })));
+    }
+    setBusy(false);
+  };
+
+  return (
+    <section className="card pad">
+      <h3>Cargos y permisos</h3>
+      <p className="muted small">Crea los cargos de tu institución y elige qué puede ver cada uno. El cargo es el nombre que se muestra; el nivel de acceso es el permiso real.</p>
+      <div className="niveles">
+        {(["admin", "decano", "maestro"] as Rol[]).map((r) => <div key={r}><b>{NIVELES[r].titulo}</b><small>{NIVELES[r].nota}</small></div>)}
+      </div>
+      <div className="cargo-list">
+        {f.map((c, i) => {
+          const gente = usan(c.orig);
+          const mio = gente.some((p) => p.id === user!.id);
+          return (
+            <div className="cargo-row" key={i}>
+              <input value={c.label} maxLength={60} onChange={(e) => set(i, { label: e.target.value })} placeholder="Nombre del cargo" aria-label="Nombre del cargo" />
+              <select value={c.rol} disabled={mio} title={mio ? "Es tu propio cargo: no puedes quitarte el acceso" : undefined} onChange={(e) => set(i, { rol: e.target.value as Rol })} aria-label="Nivel de acceso">
+                {(["admin", "decano", "maestro"] as Rol[]).map((r) => <option key={r} value={r}>{NIVELES[r].titulo}</option>)}
+              </select>
+              <span className="muted small">{gente.length ? `${gente.length} ${gente.length === 1 ? "persona" : "personas"}` : "sin uso"}</span>
+              <button type="button" className="icon-btn" disabled={gente.length > 0} title={gente.length ? "Hay personas con este cargo: cámbiales el cargo antes de borrarlo" : "Quitar cargo"}
+                onClick={() => setF(f.filter((_, j) => j !== i))} aria-label="Quitar cargo"><Icon name="trash" size={15} /></button>
+            </div>
+          );
+        })}
+      </div>
+      <button type="button" className="btn ghost sm" onClick={() => setF([...f, { label: "", rol: "maestro" }])}><Icon name="plus" size={14} /> Agregar cargo</button>
+      {error && <div className="form-err">{error}</div>}
+      {f.some((c) => c.orig && c.origRol !== c.rol && usan(c.orig).length) && !error &&
+        <p className="note small">Al guardar, las personas con un cargo cuyo nivel cambiaste pasan a tener ese nuevo acceso.</p>}
+      <div><button className="btn primary" disabled={!dirty || !!error || busy} onClick={save}>{busy ? <span className="spinner" /> : "Guardar cargos"}</button></div>
+      {api.mode === "cloud" && <p className="muted tiny">Requiere haber ejecutado supabase/migrations/006_cargos.sql (la versión actual).</p>}
+    </section>
+  );
+}
+
+/* ---------- Nombre general de cada nivel (solo administración) ---------- */
 function RoleNamesEditor() {
   const { run } = useApp();
   const [f, setF] = useState<RoleNames>(() => JSON.parse(JSON.stringify(roleNames())));
@@ -95,8 +170,8 @@ function RoleNamesEditor() {
 
   return (
     <section className="card pad">
-      <h3>Nombres de los roles</h3>
-      <p className="muted small">Solo cambia cómo se llaman en pantalla. Los permisos siguen iguales: el primer rol reparte clases a su equipo; el segundo solo ve las clases que le asignan.</p>
+      <h3>Nombre general de cada nivel</h3>
+      <p className="muted small">Se usa en los textos que hablan del grupo completo («Sin docente», «Tus docentes»), sea cual sea el cargo de cada persona.</p>
       <div className="presets">
         {ROLE_PRESETS.map((p) => (
           <button key={p.id} type="button" className={"preset" + (preset === p.id ? " on" : "")} onClick={() => setF(JSON.parse(JSON.stringify(p.names)))}>

@@ -10,7 +10,7 @@ import { Icon, Segmented } from "./ui";
 
 export type EjeY = "indice" | "bsc_acum";
 const EJE: Record<EjeY, { label: string; corto: string; get(r: Row): number | null }> = {
-  indice: { label: "Índice de competencias", corto: "índice", get: (r) => r.indice },
+  indice: { label: "CRR (competencias del radar)", corto: "CRR", get: (r) => r.indice },
   bsc_acum: { label: "Scorecard acumulado del equipo", corto: "Scorecard", get: (r) => r.juego?.bsc_acum ?? null },
 };
 /* Un color distinto por equipo: la paleta de la app y, si hay más equipos que colores, tonos repartidos por ángulo áureo. */
@@ -29,10 +29,12 @@ export function esIndividual(rows: Row[]) {
 const PERFILES = ["Eficiente", "Comprometido", "Tiempo sin resultado", "Poca participación"] as const;
 const PERFIL_CLS = ["good", "good", "warn", "bad"];
 function perfiles(rows: Row[]) {
-  const ok = rows.filter((r) => r.juego?.minutos != null && r.indice != null);
-  const mx = median(ok.map((r) => r.juego!.minutos!)), my = median(ok.map((r) => r.indice!));
-  return (r: Row) => (mx === null || my === null || r.juego?.minutos == null || r.indice == null) ? -1
-    : r.juego.minutos >= mx ? (r.indice >= my ? 1 : 2) : r.indice >= my ? 0 : 3;
+  // el resultado que manda es el Scorecard acumulado; el tiempo solo lo pone en contexto
+  const sc = (r: Row) => r.juego?.bsc_acum ?? null;
+  const ok = rows.filter((r) => r.juego?.minutos != null && sc(r) != null);
+  const mx = median(ok.map((r) => r.juego!.minutos!)), my = median(ok.map((r) => sc(r)!));
+  return (r: Row) => (mx === null || my === null || r.juego?.minutos == null || sc(r) == null) ? -1
+    : r.juego.minutos >= mx ? (sc(r)! >= my ? 1 : 2) : sc(r)! >= my ? 0 : 3;
 }
 
 /* ---------- Dispersión: tiempo invertido vs. resultado, con cuadrantes ---------- */
@@ -40,7 +42,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus, in
   rows: Row[]; onPick(r: Row): void; colors?: Map<string, string>; focus?: string | null; onFocus?(e: string | null): void; individual?: boolean;
 }) {
   // sin informe de competencias todavía, se empieza por lo que sí hay
-  const [eje, setEje] = useState<EjeY>(() => (rows.some((r) => r.indice !== null) ? "indice" : "bsc_acum"));
+  const [eje, setEje] = useState<EjeY>(() => (rows.some((r) => r.juego?.bsc_acum != null) ? "bsc_acum" : "indice"));
   const [hover, setHover] = useState<Row | null>(null);
   const pts = rows.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined && EJE[eje].get(r) !== null);
   const own = useMemo(() => teamColors(rows.map(eqDe)), [rows]);
@@ -69,7 +71,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus, in
     <div className="tscatter">
       <div className="card-h">
         {rows.some((r) => r.indice !== null)
-          ? <Segmented size="sm" value={eje} onChange={setEje} options={[{ value: "indice", label: "Competencias" }, { value: "bsc_acum", label: "Scorecard" }]} />
+          ? <Segmented size="sm" value={eje} onChange={setEje} options={[{ value: "bsc_acum", label: "Scorecard" }, { value: "indice", label: "CRR" }]} />
           : <span className="muted small">Eje vertical: <b>Scorecard acumulado</b></span>}
         {relacion && <span className="muted small">Relación tiempo–{EJE[eje].corto}: <b>{relacion}</b> (r = {r!.toFixed(2)})</span>}
       </div>
@@ -114,7 +116,7 @@ export function TimeScatter({ rows, onPick, colors: colorsIn, focus, onFocus, in
         })}
         {focus && onFocus && <button type="button" className="link small" onClick={() => onFocus(null)}>Ver todos</button>}
       </div>}
-      <p className="muted tiny">Las líneas punteadas son la mediana de la clase. {onFocus && !individual ? "Toca un equipo para resaltarlo y un punto para abrir la ficha del estudiante." : "Toca un punto para abrir la ficha del estudiante."}</p>
+      <p className="muted tiny">El tiempo es contexto: dedicar más no significa rendir más; el resultado lo da el Scorecard. Las líneas punteadas son la mediana de la clase. {onFocus && !individual ? "Toca un equipo para resaltarlo y un punto para abrir la ficha del estudiante." : "Toca un punto para abrir la ficha del estudiante."}</p>
     </div>
   );
 }
@@ -158,7 +160,7 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
                   <button type="button" key={r.r.id} className="tbm" onClick={() => onPick?.(r)}>
                     <span className="tbm-n">{displayName(r.r.nombre)}</span>
                     <span className="tb-bar time"><i style={{ width: ((r.juego?.minutos ?? 0) / maxMin) * 100 + "%", background: colors.get(e.equipo), opacity: .7 }} /><small>{fmtMin(r.juego?.minutos ?? null)}</small></span>
-                    {conComp ? <span className="num"><small className="muted">competencias</small> <b>{fmt(r.indice)}</b></span> : <span />}
+                    {conComp ? <span className="num"><small className="muted">CRR</small> <b>{fmt(r.indice)}</b></span> : <span />}
                   </button>
                 ))}
                 <p className="muted tiny">Total del equipo: {fmtMin(e.minutos)}{e.trimestres ? ` · ${e.trimestres} trimestres` : ""}. Toca un integrante para abrir su ficha.</p>
@@ -175,7 +177,7 @@ export function TeamBoard({ equipos, rows = [], colors: colorsIn, focus, onFocus
 /* ---------- Tabla por estudiante: tiempo, puntaje, Scorecard, competencias y perfil ---------- */
 type ColJ = "nombre" | "equipo" | "minutos" | "bsc" | "indice";
 export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[]; colors: Map<string, string>; focus?: string | null; onPick(r: Row): void }) {
-  const [sort, setSort] = useState<{ k: ColJ; asc: boolean }>({ k: "minutos", asc: false });
+  const [sort, setSort] = useState<{ k: ColJ; asc: boolean }>({ k: "bsc", asc: false });
   const [q, setQ] = useState("");
   const perfil = useMemo(() => perfiles(rows), [rows]);
   const conComp = rows.some((r) => r.indice !== null);
@@ -203,7 +205,7 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
       </div>
       <div className="table-scroll sgt-scroll">
         <table className="etable sgt">
-          <thead><tr>{th("nombre", "Estudiante")}{th("minutos", "Tiempo en el juego")}{th("bsc", "Scorecard acumulado", "num")}{conComp && <>{th("indice", "Competencias", "num")}<th>Perfil</th></>}</tr></thead>
+          <thead><tr>{th("nombre", "Estudiante")}{th("bsc", "Scorecard acumulado", "num")}{th("minutos", "Tiempo en el juego")}{conComp && <>{th("indice", "CRR", "num")}<th>Perfil</th></>}</tr></thead>
           <tbody>
             {lista.map((r) => {
               const m = r.juego?.minutos ?? null, p = perfil(r);
@@ -211,11 +213,11 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
               return (
                 <tr key={r.r.id} onClick={() => onPick(r)} className="">
                   <td><b>{displayName(r.r.nombre)}</b><span className="eq-cell"><span className="dot" style={{ background: colors.get(eqDe(r)) }} />{eqDe(r)}</span></td>
+                  <td className="num"><b className="sc-main">{fmt(val(r, "bsc") as number | null)}</b></td>
                   <td><div className="t-cell">
                     <span className="tb-bar time slim"><i style={{ width: ((m ?? 0) / maxMin) * 100 + "%" }} />{pm && <em className="avg" style={{ left: (pm / maxMin) * 100 + "%" }} />}</span><b className="tval">{fmtMin(m)}</b>
                     {dif !== null && <span className={"dif " + (dif >= 0 ? "pos" : "neg")}>{dif >= 0 ? "+" : ""}{dif}%</span>}</div>
                   </td>
-                  <td className="num">{fmt(val(r, "bsc") as number | null)}</td>
                   {conComp && <><td className="num"><b>{fmt(r.indice)}</b></td>
                   <td>{p >= 0 ? <span className={"pf " + PERFIL_CLS[p]}>{PERFILES[p as 0 | 1 | 2 | 3]}</span> : <span className="muted">—</span>}</td></>}
                 </tr>
@@ -224,7 +226,7 @@ export function StudentGameTable({ rows, colors, focus, onPick }: { rows: Row[];
           </tbody>
         </table>
       </div>
-      <p className="muted tiny">La raya en la barra de tiempo es la mediana de la clase; el % es la diferencia con esa mediana. El perfil compara tiempo y competencias con las medianas de la clase (las líneas punteadas del gráfico). Toca una fila para abrir la ficha.</p>
+      <p className="muted tiny">La raya en la barra de tiempo es la mediana de la clase; el % es la diferencia con esa mediana. El perfil cruza Scorecard y tiempo con las medianas de la clase. Toca una fila para abrir la ficha.</p>
     </div>
   );
 }
@@ -241,8 +243,8 @@ export function GamePanel({ rows, equipos, onPick }: { rows: Row[]; equipos: Des
     { value: "estudiantes" as const, label: `Estudiantes · ${rows.length}` },
     ...(hayEvolucion ? [{ value: "trimestres" as const, label: `Trimestres · ${nq}` }] : [])];
   // juego individual: un solo color (el equipo no agrupa a nadie) y el nombre del estudiante en lugar del de la empresa
-  const colors = useMemo(() => individual ? new Map([...equipos.map((e) => e.equipo), ...rows.map(eqDe)].map((e) => [e, "var(--accent)"]))
-    : teamColors([...equipos.map((e) => e.equipo), ...rows.map(eqDe)]), [equipos, rows, individual]);
+  // un color por equipo; en el juego individual, un color por estudiante (cada empresa es una persona)
+  const colors = useMemo(() => teamColors([...equipos.map((e) => e.equipo), ...rows.map(eqDe)]), [equipos, rows]);
   const nombres = useMemo(() => individual ? new Map(rows.map((r) => [eqDe(r).trim().toUpperCase(), displayName(r.r.nombre)])) : undefined, [rows, individual]);
   const conT = rows.filter((r) => r.juego?.minutos != null);
   return (
@@ -266,32 +268,39 @@ export function StudentGame({ row, classRows }: { row: Row; classRows: Row[] }) 
   const conT = classRows.filter((r) => r.juego?.minutos !== null && r.juego?.minutos !== undefined);
   const prom = conT.length ? conT.reduce((a, r) => a + r.juego!.minutos!, 0) / conT.length : null;
   const eq = conT.filter((r) => (r.juego!.equipo || "") === j.equipo);
+  const individual = eq.length <= 1;
   const promEq = eq.length ? eq.reduce((a, r) => a + r.juego!.minutos!, 0) / eq.length : null;
   const dif = prom && j.minutos !== null ? ((j.minutos - prom) / prom) * 100 : null;
   const max = Math.max(1, j.minutos ?? 0, prom ?? 0, promEq ?? 0);
-  const puesto = conT.length ? [...conT].sort((a, b) => b.juego!.minutos! - a.juego!.minutos!).findIndex((r) => r === row) + 1 : 0;
-  const frase = j.minutos === null ? "Aún no hay registro de tu tiempo en el juego."
-    : dif === null ? `Dedicaste ${fmtMin(j.minutos)} al juego.`
-    : Math.abs(dif) < 10 ? `Dedicaste ${fmtMin(j.minutos)}, en línea con el promedio de tu clase.`
+  // resultado principal: Scorecard acumulado
+  const conB = classRows.filter((r) => r.juego?.bsc_acum != null);
+  const promB = conB.length ? conB.reduce((a, r) => a + r.juego!.bsc_acum!, 0) / conB.length : null;
+  const puestoB = individual && j.bsc_acum != null ? [...conB].sort((a, b) => b.juego!.bsc_acum! - a.juego!.bsc_acum!).findIndex((r) => r === row) + 1 : 0;
+  const fraseB = j.bsc_acum == null ? "Aún no hay Scorecard registrado."
+    : `${individual ? "Tu Scorecard acumulado es" : "El Scorecard acumulado de tu equipo es"} ${fmt(j.bsc_acum)}${promB !== null ? ` (promedio de la clase: ${fmt(promB)})` : ""}.${puestoB ? ` Puesto ${puestoB} de ${conB.length}.` : ""}`;
+  const fraseT = j.minutos === null ? "Aún no hay registro de tu tiempo."
+    : dif === null || Math.abs(dif) < 10 ? `Dedicaste ${fmtMin(j.minutos)}, en línea con tu clase.`
     : `Dedicaste ${fmtMin(j.minutos)}, un ${Math.abs(Math.round(dif))}% ${dif > 0 ? "más" : "menos"} que el promedio de tu clase.`;
   const barra = (label: string, v: number | null, cls = "") => (
     <div className="sg-bar"><span>{label}</span><span className="sg-track"><i className={cls} style={{ width: ((v ?? 0) / max) * 100 + "%" }} /></span><b>{fmtMin(v)}</b></div>);
   return (
     <div className="card pad sgame">
       <h3>Desempeño en el juego</h3>
-      <p className="sg-frase">{frase}{puesto ? ` Eres el ${puesto}.º de ${conT.length} en tiempo dedicado.` : ""}</p>
+      <p className="sg-frase">{fraseB}</p>
+      <div className="sg-kpis k3">
+        <div className="main"><small>{individual ? "Scorecard acumulado" : "Scorecard acumulado del equipo"}</small><b>{fmt(j.bsc_acum)}</b></div>
+        <div><small>Trimestres jugados</small><b>{ultimoT(j) || "—"}</b></div>
+        <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div>
+      </div>
+      <TeamEvolution row={row} classRows={classRows} individual={individual} />
+      <h4 className="sub-h">Tiempo dedicado <span className="muted">· contexto</span></h4>
+      <p className="small">{fraseT} <span className="muted">Más tiempo no significa mejor resultado: sirve para entender cómo trabajó.</span></p>
       <div className="sg-bars">
         {barra("Tú", j.minutos, "me")}
-        {eq.length > 1 && barra(`Promedio de tu equipo (${j.equipo || "—"})`, promEq)}
+        {!individual && barra(`Promedio de tu equipo (${j.equipo || "—"})`, promEq)}
         {barra("Promedio de la clase", prom)}
       </div>
       {j.tiempos && j.tiempos.length > 0 && <TrimestreBars mine={j.tiempos} classRows={classRows} />}
-      <TeamEvolution row={row} classRows={classRows} individual={eq.length <= 1} />
-      <div className="sg-kpis k3">
-        <div><small>Tiempo dedicado</small><b>{fmtMin(j.minutos)}</b></div>
-        <div><small>{eq.length > 1 ? "Scorecard acumulado del equipo" : "Scorecard acumulado"}</small><b>{fmt(j.bsc_acum)}</b></div>
-        <div><small>Trimestres jugados</small><b>{ultimoT(j) || "—"}</b></div>
-      </div>
     </div>
   );
 }
@@ -422,7 +431,7 @@ export function QuarterPanel({ equipos, colors, focus, onFocus, nombres }: {
     const on = !!focus && sameEq(e.equipo, focus);
     // individual: todas las líneas en gris suave y la elegida en color, para que se lea sin una leyenda de 25 colores
     return { name: nombres?.get(e.equipo.trim().toUpperCase()) ?? e.equipo, key: e.equipo, values: valoresQ(e, k, n),
-      color: nombres ? (on ? "var(--accent)" : "var(--text-3)") : colors.get(e.equipo) ?? "#888",
+      color: colors.get(e.equipo) ?? "#888",
       dim: !!focus && !on, bold: on };
   });
   const prom = promedioQ(series.map((s) => s.values), n);

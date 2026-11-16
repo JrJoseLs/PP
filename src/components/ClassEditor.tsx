@@ -8,7 +8,7 @@ import { useApp } from "../data/store";
 import { Icon, Modal } from "./ui";
 import { Directory } from "../lib/directory";
 import { readSheet, parseReport } from "../lib/parse";
-import { displayName, fmt, generalIndex, isRisk, normText, plural, type Row } from "../lib/metrics";
+import { displayName, fmt, generalIndex, isRisk, normText, plural, vaciasDe, type Row } from "../lib/metrics";
 import { metricDesc, metricName } from "../lib/labels";
 import { friendlyError } from "../data/api";
 import type { Clase, Resultado } from "../lib/types";
@@ -25,13 +25,14 @@ const CAMPOS: { k: Campo; label: string }[] = [
    1. Editar un estudiante
    ===================================================================== */
 export function EditStudentModal({ row, onClose }: { row: Row; onClose(): void }) {
-  const { run, snap } = useApp();
+  const { run, snap, rowsByClase } = useApp();
   const c = row.cls;
+  const vacias = useMemo(() => vaciasDe(c.metrics, (rowsByClase.get(c.id) ?? []).map((x) => x.r.valores)), [c, rowsByClase]);
   const [f, setF] = useState({ nombre: row.r.nombre, matricula: row.r.matricula, carrera: row.r.carrera, grupo: row.r.grupo, equipo: row.r.equipo ?? "" });
   const [vals, setVals] = useState<string[]>(row.r.valores.map((v) => String(v ?? 0)));
   const [busy, setBusy] = useState(false);
   const valores = vals.map(num);
-  const idx = generalIndex(c.metrics, valores);
+  const idx = generalIndex(c.metrics, valores, vacias);
   const changed = c.metrics.filter((_, i) => Math.abs(valores[i] - (row.r.valores[i] ?? 0)) > 0.004).length;
 
   const save = async () => {
@@ -57,7 +58,7 @@ export function EditStudentModal({ row, onClose }: { row: Row; onClose(): void }
           <datalist id="edit-carreras">{snap.carreras.map((x) => <option key={x.codigo} value={x.codigo}>{x.nombre}</option>)}</datalist>
         </div>
         <div className="edit-sum">
-          <span>Índice general <b>{fmt(idx)}</b>{row.indice !== null && idx !== null && Math.abs(idx - row.indice) > 0.04 && <small className="muted"> (antes {fmt(row.indice)})</small>}</span>
+          <span>CRR <b>{fmt(idx)}</b>{row.indice !== null && idx !== null && Math.abs(idx - row.indice) > 0.04 && <small className="muted"> (antes {fmt(row.indice)})</small>}</span>
           {changed > 0 && <span className="ms info"><b>{changed}</b> {changed === 1 ? "competencia cambiada" : "competencias cambiadas"}</span>}
         </div>
         <div className="metric-inputs">
@@ -89,6 +90,7 @@ interface Rec extends Resultado { _new?: boolean; _del?: boolean; }
 
 export function GridEditor({ cls, rows, onDone }: { cls: Clase; rows: Row[]; onDone(): void }) {
   const { run } = useApp();
+  const vaciasCls = useMemo(() => vaciasDe(cls.metrics, rows.map((x) => x.r.valores)), [cls, rows]);
   const orig = useMemo(() => new Map(rows.map((r) => [r.r.id, r.r])), [rows]);
   const [list, setList] = useState<Rec[]>(() => [...rows].sort((a, b) => displayName(a.r.nombre).localeCompare(displayName(b.r.nombre), "es"))
     .map((r) => ({ ...r.r, equipo: r.r.equipo ?? "", valores: [...r.r.valores] })));
@@ -135,7 +137,7 @@ export function GridEditor({ cls, rows, onDone }: { cls: Clase; rows: Row[]; onD
           <thead><tr>
             <th className="sticky ge-name">Estudiante</th>
             {CAMPOS.slice(1).map(({ k, label }) => <th key={k}>{label}</th>)}
-            <th className="num">Índice</th>
+            <th className="num">CRR</th>
             {cls.metrics.map((m) => <th key={m} className={"vert" + (isRisk(m) ? " risk" : "")} title={metricName(m)}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></th>)}
             <th />
           </tr></thead>
@@ -143,7 +145,7 @@ export function GridEditor({ cls, rows, onDone }: { cls: Clase; rows: Row[]; onD
             {list.map((r, ri) => {
               const o = orig.get(r.id);
               const cell = (k: Campo) => (r._new || (o && (o[k] ?? "") !== (r[k] ?? "")) ? " chg" : "");
-              const idx = generalIndex(cls.metrics, r.valores);
+              const idx = generalIndex(cls.metrics, r.valores, vaciasCls);
               return (
                 <tr key={r.id} className={(r._del ? "del" : "") + (r._new ? " nuevo" : "")}>
                   <td className="sticky ge-name"><input className={"cell" + cell("nombre")} value={r.nombre} placeholder="Nombre del estudiante" data-r={ri} data-c="nombre" onKeyDown={nav} onChange={(e) => set(r.id, { nombre: e.target.value })} /></td>

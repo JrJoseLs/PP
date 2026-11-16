@@ -424,7 +424,7 @@ function DraftCard({ d, roster, upd, onDiscard }: { d: Draft; roster: RosterEntr
           <label>Periodo <input value={d.periodo} placeholder="2026-2" onChange={(e) => upd({ periodo: e.target.value })} /></label>
           <span className="swatches sm">{PALETTE.slice(0, 8).map((p) => <button type="button" key={p} className={"swatch" + (d.color === p ? " on" : "")} style={{ background: p }} onClick={() => upd({ color: p })} aria-label={p} />)}</span>
         </div>
-        <p className="small muted">{plural(est.length, "estudiante", "estudiantes")} · índice {fmt(idx)}{equipos ? ` · ${plural(equipos, "equipo", "equipos")} del juego` : ""} · {withCar === est.length ? "todos con carrera" : <span className="warn-txt">{est.length - withCar} sin carrera</span>}</p>
+        <p className="small muted">{plural(est.length, "estudiante", "estudiantes")} · CRR {fmt(idx)}{equipos ? ` · ${plural(equipos, "equipo", "equipos")} del juego` : ""} · {withCar === est.length ? "todos con carrera" : <span className="warn-txt">{est.length - withCar} sin carrera</span>}</p>
 
         <div className="link-sum">
           <span className="ms good" title="Encontrados en el directorio"><Icon name="check" size={13} /> <b>{ok}</b> enlazados</span>
