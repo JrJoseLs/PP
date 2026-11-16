@@ -55,7 +55,12 @@ export function setCargos(list?: unknown) {
     .map((c) => ({ label: c.label.trim().slice(0, 60), rol: c.rol })) : [];
   cargos = (["admin", "decano", "maestro"] as Rol[]).every((r) => ok.some((c) => c.rol === r)) ? ok : CARGOS_BASE;
   // el nombre general de cada nivel («Sin docente», «Tus docentes») sale del primer cargo de ese nivel
-  const nombre = (r: Rol): RoleName => { const one = cargos.find((c) => c.rol === r)!.label; return { one, many: pluralEs(one) }; };
+  // un cargo → su nombre; dos → los dos juntos; tres o más → un nombre neutro (el orden de la lista no importa)
+  const NEUTRO: Record<"decano" | "maestro", RoleName> = { decano: { one: "Responsable", many: "Responsables" }, maestro: { one: "Integrante del equipo", many: "Integrantes del equipo" } };
+  const nombre = (r: "decano" | "maestro"): RoleName => {
+    const ls = cargos.filter((c) => c.rol === r).map((c) => c.label);
+    return ls.length > 2 ? NEUTRO[r] : { one: ls.join(" / "), many: ls.map(pluralEs).join(" / ") };
+  };
   roles = { decano: nombre("decano"), maestro: nombre("maestro") };
 }
 /** Plural en español, palabra por palabra: «Director/Coordinador académico» → «Directores/Coordinadores académicos» */
@@ -63,6 +68,7 @@ export function pluralEs(s: string) {
   const NO = new Set(["de", "del", "la", "el", "y", "e", "o", "a", "en", "para", "por", "con"]);
   return s.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g, (w) => {
     if (NO.has(w.toLowerCase())) return w;
+    if (/s$/i.test(w)) return w;   // ya está en plural («Directores»)
     if (/[aeiouáéó]$/i.test(w)) return w + "s";
     if (/z$/i.test(w)) return w.slice(0, -1) + "ces";
     if (/ión$/i.test(w)) return w.slice(0, -3) + "iones";

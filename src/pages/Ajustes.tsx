@@ -154,6 +154,11 @@ function CargosEditor() {
           </div>
         ))}
       </div>
+      {(() => {
+        // personas con un cargo que ya no está en la lista (p. ej. renombrado fuera de aquí): no se cuentan en ninguna fila
+        const sueltas = snap.profiles.filter((p) => !f.some((c) => c.orig === cargoDe(p)));
+        return sueltas.length > 0 && <p className="note small">{sueltas.length === 1 ? "1 persona tiene" : `${sueltas.length} personas tienen`} un cargo que no está en esta lista ({[...new Set(sueltas.map(cargoDe))].join(", ")}): asígnales uno en <b>Equipo</b>.</p>;
+      })()}
       {error && <div className="form-err">{error}</div>}
       {!error && f.some((c) => c.orig && c.origRol !== c.rol && usan(c.orig).length) && <p className="note small">Las personas con un cargo que cambiaste de nivel tendrán el nuevo acceso al guardar.</p>}
       {dirty && <div className="row-gap"><button className="btn primary" disabled={!!error || busy} onClick={save}>{busy ? <span className="spinner" /> : "Guardar cambios"}</button>

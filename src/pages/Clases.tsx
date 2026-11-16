@@ -48,10 +48,15 @@ export default function Clases() {
           const conComp = c.metrics.length >= 3 && idx !== null;
           const juego = juegoByClase.get(c.id);
           const sc = mean((juego?.equiposOk ?? []).map((e) => e.bsc_acum)), tiempo = mean((juego?.completos ?? []).map((j) => j.minutos));
-          const quien = (ps: { nombre: string; rol: "admin" | "decano" | "maestro"; cargo?: string | null }[], generico: string) =>
-            ps.length ? <span className="who">{ps.slice(0, 3).map((p) => <Avatar key={p.nombre} name={p.nombre} size={20} />)}
-              <span>{ps.map((p) => p.nombre + (cargoDe(p) !== generico ? ` (${cargoDe(p)})` : "")).join(", ")}</span></span>
-              : <span className="falta">Sin asignar</span>;
+          // cada persona aparece bajo SU cargo real; si no hay nadie, una línea «Sin asignar» con el nombre del nivel
+          const filas = (ps: { id: string; nombre: string; rol: "admin" | "decano" | "maestro"; cargo?: string | null }[], nivel: string) => {
+            if (!ps.length) return <div><span className="lbl">{nivel}</span><span className="falta">Sin asignar</span></div>;
+            const grupos = new Map<string, typeof ps>();
+            ps.forEach((p) => grupos.set(cargoDe(p), [...(grupos.get(cargoDe(p)) ?? []), p]));
+            return [...grupos].map(([cargo, gente]) => (
+              <div key={cargo}><span className="lbl">{cargo}</span>
+                <span className="who">{gente.slice(0, 3).map((p) => <Avatar key={p.id} name={p.nombre} size={20} />)}<span>{gente.map((p) => p.nombre).join(", ")}</span></span></div>));
+          };
           return (
             <Link key={c.id} to={"/clases/" + c.id} className="ccard card" style={{ ["--c" as string]: c.color }}>
               <div className="ccard-top">
@@ -69,8 +74,8 @@ export default function Clases() {
               {conComp && <LevelBar rows={rr} />}
               {rol !== "maestro" && (
                 <div className="ccard-roles">
-                  {rol === "admin" && <div><span className="lbl">{D().one}</span>{quien(ds, D().one)}</div>}
-                  <div><span className="lbl">{M().many}</span>{quien(ms, M().one)}</div>
+                  {rol === "admin" && filas(ds, D().one)}
+                  {filas(ms, M().many)}
                 </div>
               )}
             </Link>
