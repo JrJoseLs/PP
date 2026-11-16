@@ -53,11 +53,26 @@ let cargos: Cargo[] = CARGOS_BASE;
 export function setCargos(list?: unknown) {
   const ok = Array.isArray(list) ? list.filter((c): c is Cargo => !!c && typeof c.label === "string" && !!c.label.trim() && ["admin", "decano", "maestro"].includes(c.rol))
     .map((c) => ({ label: c.label.trim().slice(0, 60), rol: c.rol })) : [];
-  cargos = ok.some((c) => c.rol === "admin") ? ok : CARGOS_BASE;
+  cargos = (["admin", "decano", "maestro"] as Rol[]).every((r) => ok.some((c) => c.rol === r)) ? ok : CARGOS_BASE;
+  // el nombre general de cada nivel («Sin docente», «Tus docentes») sale del primer cargo de ese nivel
+  const nombre = (r: Rol): RoleName => { const one = cargos.find((c) => c.rol === r)!.label; return { one, many: pluralEs(one) }; };
+  roles = { decano: nombre("decano"), maestro: nombre("maestro") };
+}
+/** Plural en español, palabra por palabra: «Director/Coordinador académico» → «Directores/Coordinadores académicos» */
+export function pluralEs(s: string) {
+  const NO = new Set(["de", "del", "la", "el", "y", "e", "o", "a", "en", "para", "por", "con"]);
+  return s.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/g, (w) => {
+    if (NO.has(w.toLowerCase())) return w;
+    if (/[aeiouáéó]$/i.test(w)) return w + "s";
+    if (/z$/i.test(w)) return w.slice(0, -1) + "ces";
+    if (/ión$/i.test(w)) return w.slice(0, -3) + "iones";
+    if (/[íú]$/i.test(w)) return w + "es";
+    return w + "es";
+  });
 }
 export const cargosList = () => cargos;
-/** Cargo de una persona: el guardado; si no tiene, el nombre de su nivel */
-export function cargoDe(p: { rol: Rol; cargo?: string | null }) { return p.cargo?.trim() || rolLabel(p.rol); }
+/** Cargo de una persona: el guardado; si aún no tiene, el primer cargo de su nivel */
+export function cargoDe(p: { rol: Rol; cargo?: string | null }) { return p.cargo?.trim() || cargos.find((c) => c.rol === p.rol)?.label || rolLabel(p.rol); }
 /** Nivel de acceso de un cargo */
 export const cargoRol = (label: string): Rol => cargos.find((c) => c.label === label)?.rol ?? "maestro";
 

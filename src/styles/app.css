@@ -1087,14 +1087,20 @@ button.ms { cursor: pointer; }
 .sg-kpis > div.sg-main { background: color-mix(in srgb, var(--accent) 12%, var(--fill-1)); }
 .sg-kpis > div.sg-main b { color: var(--accent); }
 .sgt .sc-main { font-size: 15px; }
-.niveles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 14px; }
-.niveles > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); font-size: 13px; }
-.niveles small { color: var(--text-3); font-size: 12px; }
-.cargo-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.cargo-row { display: grid; grid-template-columns: 1fr 170px 90px 34px; gap: 8px; align-items: center; }
-.cargo-row input, .cargo-row select { height: 36px; width: 100%; }
+.niveles { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.nivel { padding: 12px 14px; border-radius: 14px; background: var(--fill-1); display: flex; flex-direction: column; gap: 6px; }
+.nivel-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 2px; }
+.nivel-h b { font-size: 14px; }
+.nivel-h span { font-size: 12.5px; color: var(--text-3); }
+.nivel .link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
+.cargo-row { display: grid; grid-template-columns: 1fr 30px 108px 30px; gap: 8px; align-items: center; }
+.cargo-row select.mover { font-size: 12.5px; color: var(--text-3); background-color: transparent; border-color: transparent; }
+.cargo-row select.mover:hover, .cargo-row select.mover:focus { border-color: var(--sep); color: var(--text); }
+.cargo-row input, .cargo-row select { height: 34px; width: 100%; }
 .cargo-row > * { min-width: 0; }
-@media (max-width: 640px) { .niveles { grid-template-columns: 1fr; } .cargo-row { grid-template-columns: 1fr 1fr 34px; } .cargo-row > .muted { display: none; } }
+.cargo-n { justify-self: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 980px; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--fill-2); color: var(--text-2); }
+.cargo-n:empty { background: none; }
+@media (max-width: 640px) { .cargo-row { grid-template-columns: 1fr 26px 92px 28px; gap: 6px; } }
 .ccard-score { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .ccard-score small { font-size: 10.5px; font-weight: 700; color: var(--text-3); letter-spacing: .04em; }
 .ccard-game { flex: 1; min-height: 120px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 10px 12px; border-radius: 12px; background: var(--fill-1); }
