@@ -9,6 +9,7 @@ import { avgIndex, avgVector, displayName, fmt, isRisk, levelCounts, plural, spa
 import { byClase, byDecano, byMaestro, summarize, type Group } from "../lib/groups";
 import FilterBar from "../components/FilterBar";
 import { useScoped } from "../lib/scope";
+import { GameSummary } from "../components/GameSummary";
 
 function greeting() { const h = new Date().getHours(); return h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches"; }
 
@@ -76,6 +77,9 @@ export default function Dashboard() {
       <FilterBar summary={scoped ? <>Viendo <b>{plural(rows.length, "estudiante", "estudiantes")}</b> de {allRows.length}</> : undefined} />
       {scoped && !rows.length ? <Empty icon="search" title="Nada coincide con estos filtros">Quita alguno de los filtros de arriba.</Empty> : <>
 
+      <GameSummary clases={snap.clases} />
+
+      <div className="section-h"><h2>Competencias</h2></div>
       <div className="stats">
         <Stat label="Índice promedio" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>} sub="Competencias positivas, 0–100" />
         <Stat label="Estudiantes" value={rows.length} sub={plural(snap.clases.length, "clase", "clases")} />

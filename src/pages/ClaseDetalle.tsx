@@ -68,6 +68,30 @@ export default function ClaseDetalle() {
           {rol === "admin" && <button className="btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Editar</button>}
         </>} />
 
+
+      {juego && (juego.jugadores.length > 0 || juego.equipos.length > 0) && (() => {
+        const conJ = d.rr.filter((r) => r.juego);
+        // solo quienes completaron la simulación y están en el informe: los datos incompletos no entran en los promedios
+        const total = juego.completos.reduce((a, j) => a + (j.minutos ?? 0), 0);
+        const prom = juego.completos.length ? total / juego.completos.length : null;
+        const bscs = juego.equiposOk.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
+        const sinJuego = d.rr.filter((r) => !r.juego && !r.juegoParcial).length;
+        return (
+          <section className="card pad game-sec">
+            <div className="card-h"><h3><Icon name="bolt" size={18} /> Desempeño en el juego</h3><span className="muted small">{juego.meta ? `Meta: trimestre ${juego.meta} · ` : ""}{plural(juego.completos.length, "estudiante completó", "estudiantes completaron")} la simulación</span></div>
+            <div className="stats game-kpis">
+              <Stat label="Tiempo promedio" value={fmtMin(prom)} sub="por estudiante" />
+              <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.completos.length, "estudiante", "estudiantes")} />
+              <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={esIndividual(conJ) ? "promedio de la clase" : `promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
+              <Stat label="Completaron la simulación" value={`${juego.completos.length} de ${juego.jugadores.length}`} sub={juego.meta ? `llegaron al trimestre ${juego.meta}` : "jugadores"} />
+            </div>
+            <GamePanel rows={conJ} equipos={juego.equiposOk} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />
+            <IncompleteList items={juego.incompletos} equipos={juego.equiposFuera} meta={juego.meta} sinJuego={sinJuego} onPick={(r) => openStudent(r.r.id, [r.r.id])} />
+          </section>
+        );
+      })()}
+
+      <div className="section-h"><h2>Competencias</h2></div>
       {c.metrics.length < 3 && (
         <section className="card pad note-card">
           <h3><Icon name="alert" size={17} /> Falta el informe de competencias</h3>
@@ -76,7 +100,6 @@ export default function ClaseDetalle() {
             : "Cuando administración suba su informe de competencias aparecerán aquí."}</p>
         </section>
       )}
-
       {c.metrics.length >= 3 && <div className="stats">
         <Stat label="Índice de la clase" value={<span className="row-gap"><Ring value={d.idx} size={52} stroke={6} />{fmt(d.idx)}</span>}
           sub={d.sd !== null ? `Dispersión ±${fmt(d.sd)}` : undefined} />
@@ -85,7 +108,6 @@ export default function ClaseDetalle() {
         <Stat label="Necesitan apoyo" value={d.lv.bajo} tone="bad" sub={d.lv.total ? Math.round((d.lv.bajo / d.lv.total) * 100) + "% de la clase" : ""} />
       </div>}
 
-      {rol !== "maestro" && <Access c={c} />}
 
       {c.metrics.length >= 3 && <div className="grid-main">
         <section className="card pad">
@@ -123,27 +145,6 @@ export default function ClaseDetalle() {
         </section>
       ))}
 
-      {juego && (juego.jugadores.length > 0 || juego.equipos.length > 0) && (() => {
-        const conJ = d.rr.filter((r) => r.juego);
-        // solo quienes completaron la simulación y están en el informe: los datos incompletos no entran en los promedios
-        const total = juego.completos.reduce((a, j) => a + (j.minutos ?? 0), 0);
-        const prom = juego.completos.length ? total / juego.completos.length : null;
-        const bscs = juego.equiposOk.map((e) => e.bsc_acum).filter((x): x is number => x !== null);
-        const sinJuego = d.rr.filter((r) => !r.juego && !r.juegoParcial).length;
-        return (
-          <section className="card pad game-sec">
-            <div className="card-h"><h3><Icon name="bolt" size={18} /> Desempeño en el juego</h3><span className="muted small">{juego.meta ? `Meta: trimestre ${juego.meta} · ` : ""}{plural(juego.completos.length, "estudiante completó", "estudiantes completaron")} la simulación</span></div>
-            <div className="stats game-kpis">
-              <Stat label="Tiempo promedio" value={fmtMin(prom)} sub="por estudiante" />
-              <Stat label="Tiempo total" value={fmtMin(total)} sub={plural(juego.completos.length, "estudiante", "estudiantes")} />
-              <Stat label="Scorecard acumulado" value={fmt(bscs.length ? bscs.reduce((a, b) => a + b, 0) / bscs.length : null)} sub={esIndividual(conJ) ? "promedio de la clase" : `promedio de ${plural(bscs.length, "equipo", "equipos")}`} />
-              <Stat label="Completaron la simulación" value={`${juego.completos.length} de ${juego.jugadores.length}`} sub={juego.meta ? `llegaron al trimestre ${juego.meta}` : "jugadores"} />
-            </div>
-            <GamePanel rows={conJ} equipos={juego.equiposOk} onPick={(r) => openStudent(r.r.id, conJ.map((x) => x.r.id))} />
-            <IncompleteList items={juego.incompletos} equipos={juego.equiposFuera} meta={juego.meta} sinJuego={sinJuego} onPick={(r) => openStudent(r.r.id, [r.r.id])} />
-          </section>
-        );
-      })()}
 
       <section className="card">
         <div className="card-h pad-x"><h3>Estudiantes</h3>
@@ -155,6 +156,8 @@ export default function ClaseDetalle() {
           {sorted.map((r) => <StudentRow key={r.r.id} r={r} onOpen={() => openStudent(r.r.id, sorted.map((x) => x.r.id))} />)}
         </div>}
       </section>
+
+      {rol !== "maestro" && <Access c={c} />}
 
       {edit && <EditClase c={c} onClose={() => setEdit(false)} onDelete={async () => {
         if (!confirm(`¿Eliminar "${c.nombre}" y sus ${d.rr.length} resultados? Esta acción no se puede deshacer.`)) return;

@@ -1117,6 +1117,26 @@ button.ms { cursor: pointer; }
 .ccard-roles .falta { justify-self: start; padding: 2px 8px; border-radius: 980px; font-size: 11.5px; font-weight: 600; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink); }
 .note-card { border-left: 3px solid var(--warn); }
 .note-card h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.gsum { margin-bottom: 4px; }
+.gsum-etapas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.etapa { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 84px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--sep); background: var(--fill-1); color: var(--text); cursor: pointer; font: inherit; text-align: left; }
+.etapa b { font: 700 18px var(--font-d); }
+.etapa small { font-size: 11.5px; color: var(--text-3); }
+.etapa:hover { background: var(--fill-2); }
+.etapa.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.gsum-kpis { margin-bottom: 12px; grid-template-columns: repeat(3, 1fr); }
+.gsum-kpis .stat { background: var(--fill-1); box-shadow: none; }
+.gsum-list { display: flex; flex-direction: column; max-height: 360px; overflow: auto; }
+.gsum-row { display: grid; grid-template-columns: minmax(150px, 1.6fr) minmax(140px, 1.2fr) 100px 90px 100px; gap: 10px; align-items: center; padding: 8px 6px; border: 0; border-bottom: 1px solid var(--sep); background: none; color: inherit; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; border-radius: 8px; }
+.gsum-row:hover:not(.gsum-h) { background: var(--fill-1); }
+.gsum-h { cursor: default; font-size: 12px; font-weight: 600; color: var(--text-3); position: sticky; top: 0; background: var(--card); z-index: 1; }
+.gsum-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.gsum-n { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsum-av { display: flex; align-items: center; gap: 3px; }
+.gsum-av i { width: 14px; height: 8px; border-radius: 3px; background: var(--fill-2); }
+.gsum-av i.on { background: var(--accent); }
+.gsum-av b { margin-left: 8px; font-size: 12.5px; }
+@media (max-width: 700px) { .gsum-kpis { grid-template-columns: 1fr 1fr; } .gsum-row { grid-template-columns: 1fr 96px 70px; } .gsum-row > :nth-child(3) { display: none; } .gsum-av i { width: 8px; } }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
