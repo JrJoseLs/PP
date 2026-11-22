@@ -131,6 +131,13 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
   const { api, snap, toast, refresh, rowsByClase, juegoByClase, run, rows } = useApp();
   // lo que el directorio puede completar en las clases ya cargadas (carrera, matrícula, grupo, equipo)
   const patches = useMemo(() => syncPatches(snap.resultados, roster, correosDe(rows)), [snap.resultados, roster, rows]);
+  // carreras ya conocidas (códigos y nombres): sirven para reconocer la columna aunque no tenga encabezado
+  const conocidas = useMemo(() => new Set([...snap.carreras.flatMap((c) => [c.codigo, c.nombre]), ...roster.map((p) => p.carrera)].filter(Boolean).map((x) => normText(x))), [snap.carreras, roster]);
+  /** Si la carrera viene con su nombre completo («Ingeniería de Software»), se guarda con su código («ISO») como las demás */
+  const conCodigo = (ps: RosterEntry[]) => {
+    const porNombre = new Map(snap.carreras.map((c) => [normText(c.nombre), c.codigo]));
+    return ps.map((p) => ({ ...p, carrera: porNombre.get(normText(p.carrera)) ?? p.carrera }));
+  };
   const sinCarrera = useMemo(() => snap.resultados.filter((r) => !r.carrera).length, [snap.resultados]);
   const aplicar = async () => {
     const n = await run((a) => a.syncResultados(patches));
@@ -156,7 +163,8 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
         const book = await readBook(file);
         const ig = parseIgrades(book);   // informe igrades: desempeño en el juego (tiempo, Scorecard, puntajes)
         if (ig) nuevosJuegos.push(newGameJob(file.name, ig));
-        else parsed.push({ file, rows: Object.values(book)[0] ?? [] });
+        // la lista puede estar en cualquier hoja: se usa la primera que se reconozca
+        else parsed.push({ file, rows: Object.values(book).find((rows) => detectFile(rows, conocidas).kind !== "desconocido") ?? Object.values(book)[0] ?? [] });
       } catch (e) { toast(`No pude leer "${file.name}": ${friendlyError(e)}`, "error"); }
     }
     // primero los listados (se unen al directorio), después los informes (ya encuentran a cada persona)
@@ -164,14 +172,14 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
     const newJobs: ListJob[] = [];
     const reports: { file: File; rows: unknown[][] }[] = [];
     for (const p of parsed) {
-      const k = detectFile(p.rows);
+      const k = detectFile(p.rows, conocidas);
       if (k.kind === "informe") { reports.push(p); continue; }
       if (k.kind === "desconocido") {
         if (p.rows.some((r) => normText(r?.[0]) === "ESTUDIANTE")) reports.push(p);
-        else toast(`"${p.file.name}": no reconocí las columnas. Usa la plantilla del directorio o un listado con encabezados (Nombre, Matrícula, Carrera…).`, "error");
+        else toast(`"${p.file.name}": no encontré una columna con el nombre del estudiante junto a otra con su carrera, matrícula o correo. Revisa el archivo o usa la plantilla del directorio.`, "error");
         continue;
       }
-      const people = extractPeople(p.rows, k.header, k.mapping);
+      const people = conCodigo(extractPeople(p.rows, k.header, k.mapping));
       if (!people.length) { toast(`"${p.file.name}" no tiene estudiantes.`, "error"); continue; }
       const result = mergePeople(list, people);
       newJobs.push({ key: p.file.name + Date.now(), fileName: p.file.name, rows: p.rows, header: k.header, mapping: k.mapping, before: list, result, archivoManda: false });
@@ -253,7 +261,7 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
   /* --- listados: reajustar columnas, dar prioridad al archivo, deshacer --- */
   const redo = async (job: ListJob, patch: Partial<Pick<ListJob, "mapping" | "archivoManda">>) => {
     const j = { ...job, ...patch };
-    j.result = mergePeople(j.before, extractPeople(j.rows, j.header, j.mapping), j.archivoManda);
+    j.result = mergePeople(j.before, conCodigo(extractPeople(j.rows, j.header, j.mapping)), j.archivoManda);
     setJobs((js) => js.map((x) => (x.key === job.key ? j : x)));
     await persist(j.result.list, "Directorio actualizado");
   };

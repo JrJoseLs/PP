@@ -31,36 +31,96 @@ const SYN: Partial<Record<Field, string[]>> = {
 };
 const LOOKUP = new Map<string, Field>();
 Object.entries(SYN).forEach(([f, list]) => list!.forEach((s) => LOOKUP.set(s, f as Field)));
-const KNOWN_METRICS = new Set(METRICS_FALLBACK.map(normText));
 
+/** Qué es una columna según su encabezado: primero la lista exacta y, si no, por palabras clave en español
+    o inglés («Nombre completo del estudiante», «Carrera / Programa», «Apellidos y nombres», «Student Name», «Major»…).
+    El orden importa: «Nombre del docente» se ignora y «Correo del estudiante» es correo, no nombre. */
+export function fieldOfHeader(h: string): Field | null {
+  const n = normText(h);
+  if (!n) return null;
+  const exacto = LOOKUP.get(n);
+  if (exacto) return exacto;
+  // datos privados: nunca se guardan
+  if (/CONTRASE|PASSWORD|\bPASS\b|CLAVE|TELEF|CELULAR|PHONE|MOBILE|MOVIL|DIRECCION|ADDRESS|PERSONAL|CEDULA|PASAPORTE|PASSPORT|\bSSN\b|BIRTH|NACIMIENTO/.test(n)) return "privado";
+  // datos de la asignatura o del profesor, no de la persona
+  if (/DOCENTE|PROFESOR|MAESTRO|INSTRUCTOR|TEACHER|LECTURER|TUTOR|ASIGNATURA|MATERIA|SUBJECT|\bCOURSE\b|PERIODO|\bTERM\b|SEMESTER|SEMESTRE|CAMPUS|SEDE|FECHA|\bDATE\b|\bNOTA\b|CALIFICACION|\bGRADE\b|SCORE|PUNTAJE|CREDITO|CREDIT|ESTADO|STATUS|OBSERVACION|COMMENT/.test(n)) return "ignorar";
+  if (/CORREO|E ?MAIL|\bMAIL\b/.test(n)) return "email";
+  if (/LICEN/.test(n)) return "licencia";
+  // carrera: también programa, titulación, especialidad, major, degree, field of study…
+  if (/CARRERA|CAREER|PROGRAMA|PROGRAM|MAJOR|PLAN DE ESTUDIO|TITULACION|ESPECIALIDAD|LICENCIATURA|MENCION|ESCUELA|SCHOOL|FACULTAD|FACULTY|DEPARTAMENTO|DEPARTMENT|DEGREE|FIELD OF STUDY|DISCIPLINE|CONCENTRATION/.test(n)) return "carrera";
+  // matrícula / identificador del estudiante
+  if (/MATRICULA|CARNE|CARNET|EXPEDIENTE|REGISTRO|STUDENT ID|STUDENT NUMBER|STUDENT NO\b|ENROLL|REGISTRATION|\bROLL\b|\bID NUMBER|^ID\b|\bID$|CODIGO|^COD\b|\bUSER ?ID/.test(n)) return "matricula";
+  if (/EQUIPO|\bTEAM\b|EMPRESA|COMPANY|\bFIRM\b/.test(n)) return "equipo";
+  if (/GRUPO|\bGROUP\b|SECCION|SECTION|\bNRC\b|\bRNC\b|PARALELO|COHORTE|COHORT/.test(n)) return "grupo";
+  // apellidos solos, o «Apellidos y nombres» (nombre completo)
+  if (/APELLIDO|SURNAME|LAST ?NAME|FAMILY NAME/.test(n)) return /NOMBRE|FIRST|GIVEN/.test(n) ? "nombre" : "apellidos";
+  if (/^NOMBRES$|FIRST ?NAME|PRIMER NOMBRE|GIVEN ?NAME|FORENAME|NOMBRES DE PILA/.test(n)) return "nombres";
+  if (/NOMBRE|ESTUDIANTE|ALUMN|DISCENTE|STUDENT|LEARNER|PUPIL|PARTICIPANTE|PARTICIPANT|\bNAME\b|FULL ?NAME/.test(n)) return "nombre";
+  return null;
+}
+
+/* ---------- Reconocer columnas por su contenido (archivos sin encabezados o con encabezados que no dicen nada) ---------- */
+const pareceNombre = (v: string) => {
+  const w = v.replace(/[,.]/g, " ").trim().split(/\s+/);
+  return w.length >= 2 && w.length <= 7 && v.length >= 7 && w.every((x) => /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ'-]+$/.test(x));
+};
+const pareceCodigoCarrera = (v: string) => /^[A-ZÁÉÍÓÚÑ]{2,6}$/.test(v.trim());
+const pareceMatricula = (v: string) => /^[A-Z]{0,3}\d{6,10}$/i.test(v.replace(/[-\s]/g, ""));
+/** `conocidas`: códigos y nombres de carreras ya registradas (normalizados con normText) */
+function porContenido(vals: string[], conocidas?: Set<string>): Field | null {
+  const v = vals.filter(Boolean);
+  if (v.length < 3) return null;
+  const frac = (fn: (x: string) => boolean) => v.filter(fn).length / v.length;
+  const unicos = new Set(v.map(normText)).size / v.length;
+  if (frac((x) => /@/.test(x)) > 0.6) return "email";
+  if (conocidas?.size && frac((x) => conocidas.has(normText(x))) > 0.6) return "carrera";
+  if (frac(pareceCodigoCarrera) > 0.8 && unicos <= 0.8) return "carrera";
+  if (frac(pareceMatricula) > 0.8 && unicos > 0.9) return "matricula";
+  if (frac(pareceNombre) > 0.7 && unicos > 0.85) return "nombre";
+  return null;
+}
+
+const KNOWN_METRICS = new Set(METRICS_FALLBACK.map(normText));
 type Rows = unknown[][];
 const str = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "number" ? String(Math.round(v)) : String(v)).replace(/\s+/g, " ").trim();
 
 /* ---------- 1. ¿Qué tipo de archivo es y dónde están los encabezados? ---------- */
 export type FileKind = { kind: "informe"; header: number } | { kind: "listado"; header: number; mapping: Field[] } | { kind: "desconocido" };
 
-export function detectFile(rows: Rows): FileKind {
+export function detectFile(rows: Rows, conocidas?: Set<string>): FileKind {
   let best = { i: -1, score: 0 };
   for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const n = (rows[i] ?? []).map((v) => normText(v));
     if (n[0] === "ESTUDIANTE" && n.filter((v) => KNOWN_METRICS.has(v)).length >= 3) return { kind: "informe", header: i };
-    const score = n.filter((v) => v && LOOKUP.has(v) && LOOKUP.get(v) !== "ignorar").length;
+    const score = n.filter((v) => { const f = v && v.length < 60 ? fieldOfHeader(v) : null; return f && f !== "ignorar" && f !== "privado"; }).length;
     if (score > best.score) best = { i, score };
   }
-  if (best.score < 2) return { kind: "desconocido" };
-  return { kind: "listado", header: best.i, mapping: guessMapping(rows, best.i) };
+  // sirve si se sabe quién es (nombre, o nombres + apellidos) y hay al menos otro dato útil
+  const util = (m: Field[]) => (m.includes("nombre") || (m.includes("nombres") && m.includes("apellidos")))
+    && m.some((f) => ["carrera", "matricula", "email", "grupo", "equipo", "licencia"].includes(f));
+  if (best.score >= 1) { const m = guessMapping(rows, best.i, conocidas); if (util(m)) return { kind: "listado", header: best.i, mapping: m }; }
+  // sin encabezados: las columnas se reconocen solo por lo que contienen
+  const m = guessMapping(rows, -1, conocidas);
+  if (util(m)) {
+    // si la primera fila no parece una persona («Col1», «Datos»…), es un encabezado sin sentido: se salta
+    const c = m.indexOf("nombre"), primera = c >= 0 ? str(rows[0]?.[c]) : "";
+    if (c >= 0 && !pareceNombre(primera)) { const m0 = guessMapping(rows, 0, conocidas); if (util(m0)) return { kind: "listado", header: 0, mapping: m0 }; }
+    return { kind: "listado", header: -1, mapping: m };
+  }
+  return { kind: "desconocido" };
 }
 
 /** Propone qué es cada columna: por el encabezado y, si no lo reconoce, por los valores */
-export function guessMapping(rows: Rows, h: number): Field[] {
-  const head = (rows[h] ?? []).map((v) => normText(v));
+export function guessMapping(rows: Rows, h: number, conocidas?: Set<string>): Field[] {
+  const head = h >= 0 ? (rows[h] ?? []).map((v) => str(v)) : [];
   const width = Math.max(head.length, ...rows.slice(h + 1, h + 30).map((r) => r?.length ?? 0));
-  const map: Field[] = Array.from({ length: width }, (_, c) => LOOKUP.get(head[c] ?? "") ?? "ignorar");
-  // por contenido: una columna con "@" es correo
+  const map: Field[] = Array.from({ length: width }, (_, c) => (head[c] && head[c].length < 60 ? fieldOfHeader(head[c]) : null) ?? "ignorar");
+  // por contenido: columnas sin encabezado o con un encabezado que no dice nada
   map.forEach((f, c) => {
-    if (f !== "ignorar" || head[c]) return;
-    const vals = rows.slice(h + 1, h + 40).map((r) => str(r?.[c])).filter(Boolean);
-    if (vals.length && vals.filter((v) => /@/.test(v)).length / vals.length > 0.6) map[c] = "email";
+    if (f !== "ignorar" || (head[c] && fieldOfHeader(head[c]) === "ignorar")) return;
+    const vals = rows.slice(h + 1, h + 60).map((r) => str(r?.[c]));
+    const g = porContenido(vals, conocidas);
+    if (g && !map.includes(g)) map[c] = g;
   });
   // "Nombre" + "Apellidos" → "Nombre" son solo los nombres de pila; "Nombres" sin apellidos → nombre completo
   if (map.includes("apellidos") && !map.includes("nombres")) { const i = map.indexOf("nombre"); if (i >= 0) map[i] = "nombres"; }
