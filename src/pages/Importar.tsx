@@ -25,6 +25,10 @@ import { MSG, READY_INFO, checkPayload, payloadToFile } from "../lib/marketplace
 
 type Est = ClaseDraft["estudiantes"][number];
 
+/** Correo de cada estudiante según el informe del juego (sirve para enlazarlo con el directorio aunque el nombre difiera) */
+const correosDe = (rows: { r: { id: string }; juego?: { email: string }; juegoParcial?: { email: string } }[]) =>
+  new Map(rows.map((x) => [x.r.id, (x.juego?.email || x.juegoParcial?.email || "").toLowerCase()] as const).filter(([, e]) => e));
+
 /** Nombre de clase sugerido por la extensión para cada archivo recibido */
 const pistaDe = new WeakMap<File, string>();
 /** Solo se acepta un nombre corto de letras, números y . _ - (p. ej. «jser-MKTJun26»); cualquier otra cosa se descarta */
@@ -124,9 +128,9 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
   /** Informes igrades (desempeño en el juego) pendientes */
   games: GameJob[]; setGames: React.Dispatch<React.SetStateAction<GameJob[]>>;
 }) {
-  const { api, snap, toast, refresh, rowsByClase, juegoByClase, run } = useApp();
+  const { api, snap, toast, refresh, rowsByClase, juegoByClase, run, rows } = useApp();
   // lo que el directorio puede completar en las clases ya cargadas (carrera, matrícula, grupo, equipo)
-  const patches = useMemo(() => syncPatches(snap.resultados, roster), [snap.resultados, roster]);
+  const patches = useMemo(() => syncPatches(snap.resultados, roster, correosDe(rows)), [snap.resultados, roster, rows]);
   const sinCarrera = useMemo(() => snap.resultados.filter((r) => !r.carrera).length, [snap.resultados]);
   const aplicar = async () => {
     const n = await run((a) => a.syncResultados(patches));
@@ -508,7 +512,7 @@ function DraftCard({ d, roster, upd, onDiscard }: { d: Draft; roster: RosterEntr
    ===================================================================== */
 const PAGE = 100;
 function DirectoryTab({ roster, persist, refresh, snap }: { roster: RosterEntry[]; persist(l: RosterEntry[], ok?: string): Promise<void>; refresh(): Promise<void>; snap: ReturnType<typeof useApp>["snap"] }) {
-  const { toast, run } = useApp();
+  const { toast, run, rows: filasClases } = useApp();
   const [rows, setRows] = useState<RosterEntry[]>(roster);
   const [dirty, setDirty] = useState(false);
   const [q, setQ] = useState("");
@@ -521,7 +525,7 @@ function DirectoryTab({ roster, persist, refresh, snap }: { roster: RosterEntry[
   useEffect(() => { setNames(Object.fromEntries(snap.carreras.map((c) => [c.codigo, c.nombre]))); }, [snap.carreras]);
 
   const comp = completeness(rows);
-  const patches = useMemo(() => syncPatches(snap.resultados, roster), [snap.resultados, roster]);
+  const patches = useMemo(() => syncPatches(snap.resultados, roster, correosDe(filasClases)), [snap.resultados, roster, filasClases]);
   const n = normText(q);
   const list = rows.filter((e) =>
     (filtro === "todos" || (filtro === "incompletos" ? !e.carrera || !e.matricula : filtro === "carrera" ? !e.carrera : !e.matricula)) &&

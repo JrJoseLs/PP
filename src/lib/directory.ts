@@ -165,11 +165,12 @@ export function mergePeople(current: RosterEntry[], incoming: RosterEntry[], arc
 function refresh(dir: Directory, list: RosterEntry[]) { Object.assign(dir, new Directory(list)); }
 
 /* ---------- 5. Completar resultados ya cargados con el directorio ---------- */
-export function syncPatches(resultados: Resultado[], list: RosterEntry[]): ResultadoPatch[] {
+/** `emails`: correo de cada resultado (id → correo), p. ej. el del informe del juego. Si coincide con el directorio, el enlace es seguro. */
+export function syncPatches(resultados: Resultado[], list: RosterEntry[], emails?: Map<string, string>): ResultadoPatch[] {
   const dir = new Directory(list);
   const out: ResultadoPatch[] = [];
   for (const r of resultados) {
-    const f = dir.find({ nombre: r.nombre, matricula: r.matricula, equipo: r.equipo, grupo: r.grupo });
+    const f = dir.find({ nombre: r.nombre, matricula: r.matricula, equipo: r.equipo, grupo: r.grupo, email: emails?.get(r.id) || undefined });
     if (!f.e || !(f.seguro || f.how !== "nombre")) continue;
     const p: ResultadoPatch = { id: r.id };
     if (!r.matricula && f.e.matricula) p.matricula = f.e.matricula;
