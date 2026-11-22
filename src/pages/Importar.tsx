@@ -124,7 +124,15 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
   /** Informes igrades (desempeño en el juego) pendientes */
   games: GameJob[]; setGames: React.Dispatch<React.SetStateAction<GameJob[]>>;
 }) {
-  const { api, snap, toast, refresh, rowsByClase, juegoByClase } = useApp();
+  const { api, snap, toast, refresh, rowsByClase, juegoByClase, run } = useApp();
+  // lo que el directorio puede completar en las clases ya cargadas (carrera, matrícula, grupo, equipo)
+  const patches = useMemo(() => syncPatches(snap.resultados, roster), [snap.resultados, roster]);
+  const sinCarrera = useMemo(() => snap.resultados.filter((r) => !r.carrera).length, [snap.resultados]);
+  const aplicar = async () => {
+    const n = await run((a) => a.syncResultados(patches));
+    if (n !== false) toast(`${plural(n as number, "estudiante actualizado", "estudiantes actualizados")} en las clases`);
+    await refresh();
+  };
   const go = useNavigate();
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -326,6 +334,23 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
           } catch (e) { toast(friendlyError(e), "error"); }
         }}
         onClose={() => setGames((gs) => gs.filter((x) => x.key !== g.key))} />)}
+
+      {(patches.length > 0 || (jobs.length > 0 && sinCarrera > 0)) && (() => {
+        const cuenta = (k: "carrera" | "matricula" | "grupo" | "equipo") => patches.filter((p) => p[k]).length;
+        const partes = [["carrera", "carrera"], ["matricula", "matrícula"], ["grupo", "grupo"], ["equipo", "equipo"]]
+          .map(([k, t]) => [cuenta(k as "carrera"), t] as const).filter(([n]) => n).map(([n, t]) => `${n} con ${t}`);
+        const quedan = sinCarrera - cuenta("carrera");
+        return (
+          <section className={"card pad sync-card" + (patches.length ? " glow" : "")}>
+            <div className="card-h"><h3><Icon name="bolt" size={17} /> Clases ya cargadas</h3>
+              {patches.length > 0 && <button className="btn primary sm" onClick={aplicar}>Aplicar a las clases</button>}</div>
+            {patches.length > 0
+              ? <p className="small">El directorio puede completar <b>{plural(patches.length, "estudiante", "estudiantes")}</b> de tus clases: {partes.join(" · ")}. Solo se rellenan datos vacíos; las notas no cambian.</p>
+              : <p className="small muted">Nada que completar en las clases con este directorio.</p>}
+            {quedan > 0 && <p className="small muted">{plural(quedan, "estudiante de tus clases sigue", "estudiantes de tus clases siguen")} sin carrera después de esto: su nombre o matrícula no coincide con nadie del directorio. Puedes corregirlos en la clase con «Editar en tabla».</p>}
+          </section>
+        );
+      })()}
 
       {jobs.map((j, idx) => <ListCard key={j.key} job={j} last={idx === jobs.length - 1} onRedo={(p) => redo(j, p)} onUndo={() => undo(j)} onClose={() => setJobs((js) => js.filter((x) => x.key !== j.key))} />)}
 
