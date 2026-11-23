@@ -304,6 +304,8 @@ section.card { margin-bottom: 18px; }
 .radar .axl { font-size: 10.5px; fill: var(--r-ink); transition: fill .15s; }
 .radar.narrow .axl { font-size: 12px; }
 .radar .axl.risk { fill: var(--r-risk); }
+.radar .axl.key { fill: var(--accent-2); font-weight: 700; }
+.radar .spoke.key { stroke: var(--accent-2); stroke-opacity: .55; stroke-width: 1.4; }
 .radar .axl.on { font-weight: 700; }
 .radar.compact > svg { pointer-events: none; cursor: default; }
 .radar.compact .grid, .radar.compact .spoke { stroke: var(--sep); }

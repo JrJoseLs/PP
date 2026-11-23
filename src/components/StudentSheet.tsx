@@ -107,12 +107,12 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         {data.conCarrera && data.mismaGente && modo !== "clase" && <p className="muted small">Todos los de {row.carrera} están en esta clase: el promedio de la carrera coincide con el de la clase y las dos líneas se superponen.</p>}
         {pf && (
           <div className="claves">
-            <span className="muted small">Clave para {pf.nombre}:</span>
+            <span className="muted small">★ Clave para {pf.nombre}:</span>
             {pf.claves.map((k) => { const v = metricValue(row, data.m.find((m) => normText(m) === normText(k)) ?? k); const i = data.m.findIndex((m) => normText(m) === normText(k)); const a = i >= 0 ? data.clsAvg[i] : null;
               return <span key={k} className="clave" title={metricDesc(k)}>{metricName(k)} <b>{fmt(v)}</b>{v !== null && a !== null && <Delta v={v - a} />}</span>; })}
           </div>
         )}
-        <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} />
+        <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} destacar={pf?.claves} />
       </div>}
 
       {/* después del perfil de competencias, su desempeño en el juego */}

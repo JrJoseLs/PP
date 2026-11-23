@@ -6,7 +6,7 @@
    - Detalle por competencia al pasar el cursor o tocar; leyenda para ocultar o resaltar series.
    Y suma: transición animada, valores sobre los puntos, promedio por serie y descarga en PNG. */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fmt, isRisk, mean, metricLevel } from "../lib/metrics";
+import { fmt, isRisk, mean, metricLevel, normText } from "../lib/metrics";
 import { Icon } from "./ui";
 import { metricDesc, metricName } from "../lib/labels";
 
@@ -42,8 +42,10 @@ function wrap(t: string, max: number) {
   return lines.slice(0, 3);
 }
 
-export function Radar({ labels, series, size = 560, invert = true, compact = false, onInvert, title }: {
+export function Radar({ labels, series, size = 560, invert = true, compact = false, onInvert, title, destacar }: {
   labels: string[]; series: Series[]; size?: number; invert?: boolean; compact?: boolean; onInvert?(v: boolean): void; title?: string;
+  /** Competencias a resaltar (p. ej. las 5 clave del perfil de su carrera): eje y etiqueta en otro color, con ★ */
+  destacar?: string[];
 }) {
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   const [focus, setFocus] = useState<number | null>(null);
@@ -67,6 +69,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
   const H = compact ? size : 2 * R + (narrow ? 64 : 84);
   const cx = W / 2, cy = H / 2;
   const risk = useMemo(() => labels.map(isRisk), [labels]);
+  const clave = useMemo(() => { const k = new Set((destacar ?? []).map(normText)); return labels.map((m) => k.has(normText(m))); }, [labels, destacar]);
   const shown = (v: number | null, i: number) => (v === null ? 0 : invert && risk[i] ? 100 - v : v);
   const target = series.map((s) => labels.map((_, i) => shown(s.values[i] ?? null, i)));
   const vals = useMorph(target);
@@ -89,7 +92,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
   const etiquetas = compact ? [] : labels.map((lab, i) => {
     const a = ang(i), lx = cx + (R + 16) * Math.cos(a), ly = cy + (R + 16) * Math.sin(a);
     const anchor: "start" | "end" | "middle" = Math.cos(a) > 0.04 ? "start" : Math.cos(a) < -0.04 ? "end" : "middle";
-    const lines = wrap(metricName(lab) + (risk[i] ? " ↓" : ""), Math.abs(Math.cos(a)) < 0.3 ? 13 : narrow ? 12 : 16);
+    const lines = wrap((clave[i] ? "★ " : "") + metricName(lab) + (risk[i] ? " ↓" : ""), Math.abs(Math.cos(a)) < 0.3 ? 13 : narrow ? 12 : 16);
     const center = Math.abs(Math.cos(a)) < 0.2 ? 6 : 0;
     const dy = Math.sin(a) > 0.5 ? 10 + center : Math.sin(a) < -0.5 ? -4 - center - (lines.length - 1) * LH : 4 - (lines.length - 1) * (LH / 2);
     const w = Math.max(...lines.map((l) => l.length)) * CW;
@@ -186,7 +189,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
         </>}
         {riskPath && <path d={riskPath} className="risk-sector" />}
         {[0.25, 0.5, 0.75, 1].map((f) => <polygon key={f} points={ring(f)} className="grid" />)}
-        {labels.map((_, i) => { const [x, y] = pt(i, 100); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} className={"spoke" + (axis?.i === i ? " on" : "")} />; })}
+        {labels.map((_, i) => { const [x, y] = pt(i, 100); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} className={"spoke" + (clave[i] ? " key" : "") + (axis?.i === i ? " on" : "")} />; })}
         {!compact && [25, 50, 75, 100].map((v) => <text key={v} x={cx + 4} y={cy - (R * v) / 100 + 10} className="tick">{v}</text>)}
 
         {series.map((s, k) => hidden.has(k) ? null : (
@@ -207,7 +210,7 @@ export function Radar({ labels, series, size = 560, invert = true, compact = fal
         })}
 
         {etiquetas.map(({ i, lx, y, anchor, lines }) => (
-          <text key={i} x={lx} y={y} textAnchor={anchor} className={"axl" + (risk[i] ? " risk" : "") + (axis?.i === i ? " on" : "")}>
+          <text key={i} x={lx} y={y} textAnchor={anchor} className={"axl" + (risk[i] ? " risk" : "") + (clave[i] ? " key" : "") + (axis?.i === i ? " on" : "")}>
             {lines.map((ln, k) => <tspan key={k} x={lx} dy={k ? LH : 0}>{ln}</tspan>)}
           </text>
         ))}
