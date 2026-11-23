@@ -40,6 +40,8 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
 
   if (!row || !data) return null;
   const idx = list.indexOf(id);
+  // clase con solo el desempeño del juego: sin radar ni tarjetas de competencias vacías
+  const conComp = data.labels.length >= 3;
   const pick = (v: (number | null)[]) => data.labels.map((x) => v[data.m.indexOf(x)]) as number[];
   const crr = (rr: Row[]) => mean(rr.map((x) => x.indice));
   const series: Series[] = [{ name: displayName(row.r.nombre).split(" ").slice(0, 2).join(" "), color: row.cls.color, values: pick(row.r.valores), index: row.indice }];
@@ -77,10 +79,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
 
       {editing && <EditStudentModal row={row} onClose={() => setEditing(false)} />}
 
-      {row.juego && <StudentGame row={row} classRows={data.classRows} />}
-      {!row.juego && row.juegoParcial && <StudentGamePartial d={row.juegoParcial} meta={juegoByClase.get(row.r.clase_id)?.meta ?? 0} />}
-
-      <div className="card pad">
+      {conComp && <div className="card pad">
         <div className="card-h">
           <h3>Perfil de competencias</h3>
           {data.conCarrera
@@ -90,9 +89,13 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         {!data.conCarrera && <p className="muted small">Este estudiante no tiene carrera asignada, así que no se puede comparar con su carrera. Asígnala con <b>Editar</b> o subiendo el directorio.</p>}
         {data.conCarrera && data.mismaGente && modo !== "clase" && <p className="muted small">Todos los de {row.carrera} están en esta clase: el promedio de la carrera coincide con el de la clase y las dos líneas se superponen.</p>}
         <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} />
-      </div>
+      </div>}
 
-      <div className="grid2">
+      {/* después del perfil de competencias, su desempeño en el juego */}
+      {row.juego && <StudentGame row={row} classRows={data.classRows} />}
+      {!row.juego && row.juegoParcial && <StudentGamePartial d={row.juegoParcial} meta={juegoByClase.get(row.r.clase_id)?.meta ?? 0} />}
+
+      {conComp && <div className="grid2">
         <div className="card pad">
           <h3 className="h-ico good"><Icon name="arrowUp" size={16} /> Fortalezas</h3>
           <ul className="ilist">{data.pos.slice(0, 4).map((x) => (
@@ -108,7 +111,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
               <li key={x.name}><span title={metricDesc(x.name)}>{metricName(x.name)}</span><span className="v neg">{fmt(x.v)}</span></li>))}</ul>
           </>}
         </div>
-      </div>
+      </div>}
 
       {data.others.length > 0 && (
         <div className="card pad">
@@ -119,7 +122,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         </div>
       )}
 
-      <div className="card pad">
+      {conComp && <div className="card pad">
         <h3>Todas las competencias</h3>
         <div className="mtable">
           <div className="mt-row mt-h"><span>Competencia</span><span>Valor</span><span>Clase</span><span>Δ</span></div>
@@ -135,7 +138,7 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
             );
           })}
         </div>
-      </div>
+      </div>}
     </Sheet>
   );
 }
