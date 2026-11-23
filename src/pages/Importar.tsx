@@ -641,16 +641,7 @@ function DirectoryTab({ roster, persist, refresh, snap }: { roster: RosterEntry[
         </div>
       )}
 
-      {codes.length > 0 && (
-        <div className="card pad">
-          <h3>Nombres de carreras</h3>
-          <p className="muted small">Los listados traen códigos (ej. ISO). Escribe un nombre legible para mostrarlo en toda la app.</p>
-          <div className="carreras">
-            {codes.map((c) => <label key={c} className="field inline"><code>{c}</code><input value={names[c] ?? ""} placeholder="Nombre visible" onChange={(e) => setNames({ ...names, [c]: e.target.value })} /></label>)}
-          </div>
-          <button className="btn" onClick={() => run((a) => a.upsertCarreras(codes.map((c) => ({ codigo: c, nombre: names[c] ?? "" }))), "Carreras guardadas")}>Guardar nombres</button>
-        </div>
-      )}
+      {codes.length > 0 && <p className="muted small">Los nombres visibles de las carreras y sus perfiles se editan en <b>Ajustes → Carreras y perfiles</b>.</p>}
     </>
   );
 }

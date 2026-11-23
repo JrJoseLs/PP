@@ -1170,11 +1170,15 @@ button.ms { cursor: pointer; }
 .peso-row input[type=range] { width: 100%; accent-color: var(--accent); }
 .perfiles { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .perfil { border-radius: 12px; background: var(--fill-1); }
-.perfil-h { width: 100%; display: grid; grid-template-columns: 54px minmax(140px, 1fr) 2.4fr 16px; gap: 10px; align-items: center; padding: 10px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.perfil-h[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.perfil-h { display: grid; grid-template-columns: 64px minmax(160px, 1fr) 96px 2.2fr; gap: 10px; align-items: center; padding: 8px 10px; }
+.perfil.sin { box-shadow: inset 3px 0 0 var(--warn); }
+.perfil-claves { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.perfil-claves:hover { background: var(--fill-2); }
+.perfil-claves > svg { margin-left: auto; flex: none; }
+.perfil-claves[aria-expanded="true"] > svg { transform: rotate(90deg); }
 .perfil-cod { font: 700 13px var(--font-d); color: var(--accent-2); }
-.perfil-nom { font-size: 13.5px; font-weight: 600; min-width: 0; }
-.perfil-claves { display: flex; flex-wrap: wrap; gap: 4px; }
+.perfil-nom { height: 32px; min-width: 0; font-weight: 600; }
+.perfil-n { white-space: nowrap; }
 .perfil-claves .clave { font-size: 11px; padding: 2px 8px; }
 .perfil-body { padding: 0 12px 12px; }
 .perfil-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
@@ -1186,7 +1190,7 @@ button.ms { cursor: pointer; }
 .cpick:disabled { opacity: .45; cursor: not-allowed; }
 .perfil-nuevo { height: 34px; width: 220px; }
 .link.danger { color: var(--bad-ink); }
-@media (max-width: 700px) { .perfil-h { grid-template-columns: 48px 1fr 16px; } .perfil-claves { grid-column: 1 / -1; grid-row: 2; } .perfil-meta { flex-direction: column; align-items: stretch; } .perfil-meta input { min-width: 0; width: 100%; } }
+@media (max-width: 700px) { .perfil-h { grid-template-columns: 56px 1fr; } .perfil-n { display: none; } .perfil-claves { grid-column: 1 / -1; grid-row: 2; } .perfil-meta { flex-direction: column; align-items: stretch; } .perfil-meta input { min-width: 0; width: 100%; } }
 .sgame h3 { margin-bottom: 6px; }
 .sg-frase { font-size: 15px; color: var(--text); margin: 0 0 12px; }
 .sg-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
