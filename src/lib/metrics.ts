@@ -65,6 +65,10 @@ export interface Row {
   r: Resultado;
   cls: Clase;
   indice: number | null;
+  /** Índice de perfil de carrera (pondera las 5 competencias clave de su carrera); null si su carrera no tiene perfil */
+  perfil: number | null;
+  /** Código del perfil usado («ISO» para ISO e ISOR) */
+  perfilCodigo: string | null;
   carrera: string;     // etiqueta visible
   grupo: string;
   equipo: string;     // equipo dentro del juego ("" si no se sabe)

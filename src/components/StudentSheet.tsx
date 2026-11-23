@@ -3,7 +3,8 @@ import { useApp, usePref } from "../data/store";
 import { Avatar, Delta, Icon, LevelChip, Segmented, Sheet } from "./ui";
 import { Radar, type Series } from "./Radar";
 import { Ring } from "./Charts";
-import { SIN_CARRERA, avgVector, displayName, fmt, isRisk, mean, metricValue, personKey, sparseMetrics, type Row } from "../lib/metrics";
+import { SIN_CARRERA, avgVector, displayName, fmt, isRisk, mean, metricValue, normText, personKey, sparseMetrics, type Row } from "../lib/metrics";
+import { perfilesCfg } from "../lib/perfiles";
 import { metricDesc, metricName } from "../lib/labels";
 import { EditStudentModal } from "./ClassEditor";
 import { StudentGame, StudentGamePartial } from "./GameCharts";
@@ -49,6 +50,15 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
   if (modo !== "carrera") series.push({ name: "Promedio de la clase", color: "var(--text-3)", values: pick(data.clsAvg), dash: true, muted: true, index: crr(data.classRows) });
   if (modo !== "clase") series.push({ name: `Promedio de ${row.carrera} (${data.carRows.length})`, color: "var(--accent-2)", values: pick(data.carAvg), dash: true, muted: true, index: crr(data.carRows) });
   const pct = data.total > 1 ? Math.round((1 - (data.rank - 1) / (data.total - 1)) * 100) : null;
+  /** «mejor que el X %» de un grupo: parte de los demás que quedan por debajo */
+  const pctl = (v: number | null, grupo: (number | null)[]) => {
+    const o = grupo.filter((x): x is number => typeof x === "number");
+    return v === null || o.length < 3 ? null : Math.round((o.filter((x) => x < v).length / (o.length - 1)) * 100);
+  };
+  const pctCarrera = data.conCarrera ? pctl(row.indice, data.carRows.map((x) => x.indice)) : null;
+  const perfilGrupo = row.perfilCodigo ? rows.filter((x) => x.perfilCodigo === row.perfilCodigo) : [];
+  const pctPerfil = pctl(row.perfil, perfilGrupo.map((x) => x.perfil));
+  const pf = row.perfilCodigo ? perfilesCfg().perfiles[row.perfilCodigo] : null;
 
   return (
     <Sheet open onClose={onClose} wide title={
@@ -73,8 +83,15 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         </div>
         <div className="st-score">
           <Ring value={row.indice} size={74} />
-          <div><LevelChip v={row.indice} /><small>{data.rank ? `#${data.rank} de ${data.total}` : ""}{pct !== null ? ` · mejor que el ${pct}%` : ""}</small></div>
+          <div><LevelChip v={row.indice} /><small>{data.rank ? `#${data.rank} de ${data.total}` : ""}{pct !== null ? ` · mejor que el ${pct}% de la clase` : ""}</small>
+            {pctCarrera !== null && <small>mejor que el {pctCarrera}% de {row.carrera}</small>}</div>
         </div>
+        {row.perfil !== null && pf && (
+          <div className="st-perfil" title={`Índice de perfil de ${pf.nombre}: ${Math.round(perfilesCfg().peso * 100)} % sus 5 competencias clave y ${Math.round((1 - perfilesCfg().peso) * 100)} % las demás`}>
+            <small>Perfil {row.perfilCodigo}</small><b>{fmt(row.perfil)}</b>
+            {pctPerfil !== null && <small>mejor que el {pctPerfil}% de su carrera</small>}
+          </div>
+        )}
       </div>
 
       {editing && <EditStudentModal row={row} onClose={() => setEditing(false)} />}
@@ -88,6 +105,13 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         </div>
         {!data.conCarrera && <p className="muted small">Este estudiante no tiene carrera asignada, así que no se puede comparar con su carrera. Asígnala con <b>Editar</b> o subiendo el directorio.</p>}
         {data.conCarrera && data.mismaGente && modo !== "clase" && <p className="muted small">Todos los de {row.carrera} están en esta clase: el promedio de la carrera coincide con el de la clase y las dos líneas se superponen.</p>}
+        {pf && (
+          <div className="claves">
+            <span className="muted small">Clave para {pf.nombre}:</span>
+            {pf.claves.map((k) => { const v = metricValue(row, data.m.find((m) => normText(m) === normText(k)) ?? k); const i = data.m.findIndex((m) => normText(m) === normText(k)); const a = i >= 0 ? data.clsAvg[i] : null;
+              return <span key={k} className="clave" title={metricDesc(k)}>{metricName(k)} <b>{fmt(v)}</b>{v !== null && a !== null && <Delta v={v - a} />}</span>; })}
+          </div>
+        )}
         <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} />
       </div>}
 

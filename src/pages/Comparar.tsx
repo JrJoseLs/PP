@@ -188,6 +188,7 @@ export default function Comparar() {
               {view === "juego" && <GameBars series={chosen.map((g) => ({ name: g.label, color: g.color, rows: g.rows as Row[] }))} />}
               {view === "tabla" && <DiffTable labels={labels} chosen={chosen.map((g) => ({ label: g.label, color: g.color, values: vecFor(g.vector) }))} />}
             </div>
+            {view !== "juego" && chosen.length > 1 && <Diferencias labels={labels} chosen={chosen.map((g) => ({ label: g.label, color: g.color, values: vecFor(g.vector), rows: g.rows as Row[] }))} />}
           </>}
         </section>
       </div>
@@ -219,6 +220,47 @@ function DiffTable({ labels, chosen }: { labels: string[]; chosen: { label: stri
         </tbody>
       </table>
       <p className="muted tiny">Verde = mejor valor de la fila · rojo = peor. En las competencias ↓ menos es mejor.</p>
+    </div>
+  );
+}
+
+/* ---------- Dónde se diferencian: los promedios generales se parecen; la diferencia está en competencias concretas ---------- */
+function Diferencias({ labels, chosen }: { labels: string[]; chosen: { label: string; color: string; values: (number | null)[]; rows: Row[] }[] }) {
+  const top = labels.map((m, i) => {
+    const vs = chosen.map((c) => c.values[i]).filter((v): v is number => typeof v === "number");
+    return { m, i, rango: vs.length > 1 ? Math.max(...vs) - Math.min(...vs) : 0 };
+  }).filter((x) => x.rango >= 1).sort((a, b) => b.rango - a.rango).slice(0, 5);
+  // rango del índice dentro de cada grupo (del 10 % más bajo al 10 % más alto): muestra la dispersión que el promedio esconde
+  const banda = (rows: Row[]) => {
+    const v = rows.map((r) => r.indice).filter((x): x is number => x !== null).sort((a, b) => a - b);
+    if (v.length < 3) return null;
+    const q = (p: number) => v[Math.min(v.length - 1, Math.max(0, Math.round(p * (v.length - 1))))];
+    return { lo: q(0.1), hi: q(0.9), med: q(0.5) };
+  };
+  if (!top.length) return null;
+  return (
+    <div className="card pad dif-card">
+      <h3>Dónde se diferencian</h3>
+      <p className="muted small">Los promedios generales suelen parecerse; estas son las competencias con más distancia entre lo que comparas.</p>
+      <div className="dif-list">
+        {top.map(({ m, i, rango }) => (
+          <div className="dif-row" key={m}>
+            <span className={"dif-n" + (isRisk(m) ? " risk" : "")} title={metricDesc(m)}>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span>
+            <span className="dif-vals">{chosen.map((c) => <span key={c.label} className="dif-v" title={c.label}><span className="dot" style={{ background: c.color }} />{fmt(c.values[i])}</span>)}</span>
+            <b className="dif-r">{fmt(rango)} pts</b>
+          </div>
+        ))}
+      </div>
+      <h4 className="sub-h">Dispersión del índice</h4>
+      <div className="dif-bandas">
+        {chosen.map((c) => { const b = banda(c.rows); return b && (
+          <div className="dif-banda" key={c.label} title={`El 80 % central de ${c.label} va de ${fmt(b.lo)} a ${fmt(b.hi)}; la mitad está por encima de ${fmt(b.med)}`}>
+            <span className="dif-bl"><span className="dot" style={{ background: c.color }} />{c.label}</span>
+            <span className="dif-track"><i style={{ left: b.lo + "%", width: Math.max(1, b.hi - b.lo) + "%", background: c.color }} /><em style={{ left: b.med + "%" }} /></span>
+            <span className="muted small">{fmt(b.lo)}–{fmt(b.hi)}</span>
+          </div>); })}
+      </div>
+      <p className="muted tiny">La barra es el 80 % central de cada grupo (sin el 10 % más bajo ni el 10 % más alto); la raya es la mediana.</p>
     </div>
   );
 }

@@ -23,7 +23,7 @@ export default function ClaseDetalle() {
   const go = useNavigate();
   const [invert, setInvert] = usePref("radarInvert", true);
   const [vs, setVs] = useState<"general" | "carreras" | "equipos">("general");
-  const [sort, setSort] = useState<{ k: "nombre" | "indice" | "carrera"; dir: 1 | -1 }>({ k: "indice", dir: -1 });
+  const [sort, setSort] = useState<{ k: "nombre" | "indice" | "carrera" | "perfil"; dir: 1 | -1 }>({ k: "indice", dir: -1 });
   const [edit, setEdit] = useState(false);
   const [grid, setGrid] = useState(false);
   const c = snap.clases.find((x) => x.id === id);
@@ -44,7 +44,7 @@ export default function ClaseDetalle() {
 
   const sorted = [...d.rr].sort((a, b) => {
     const k = sort.k;
-    const v = k === "nombre" ? displayName(a.r.nombre).localeCompare(displayName(b.r.nombre), "es") : k === "carrera" ? a.carrera.localeCompare(b.carrera, "es") : (a.indice ?? -1) - (b.indice ?? -1);
+    const v = k === "nombre" ? displayName(a.r.nombre).localeCompare(displayName(b.r.nombre), "es") : k === "carrera" ? a.carrera.localeCompare(b.carrera, "es") : k === "perfil" ? (a.perfil ?? -1) - (b.perfil ?? -1) : (a.indice ?? -1) - (b.indice ?? -1);
     return v * sort.dir;
   });
   const pick = (v: (number | null)[]) => d.labels.map((m) => v[c.metrics.indexOf(m)]) as number[];
@@ -53,7 +53,7 @@ export default function ClaseDetalle() {
     : (vs === "equipos" ? d.equipos : d.carreras).slice(0, 8).map((g) => ({ name: g.label, color: g.color, values: pick(avgVector(g.rows, c.metrics)) }));
   const pos = d.comp.filter((x) => !isRisk(x.m) && x.v !== null).sort((a, b) => b.v! - a.v!);
   const th = (k: typeof sort.k, label: string) => (
-    <button className={"th" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : k === "indice" ? -1 : 1 })}>
+    <button className={"th" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : k === "indice" || k === "perfil" ? -1 : 1 })}>
       {label}{sort.k === k ? (sort.dir === 1 ? " ↑" : " ↓") : ""}</button>);
 
   return (
@@ -152,7 +152,7 @@ export default function ClaseDetalle() {
             ? <button className="btn sm" onClick={() => setGrid(true)}><Icon name="edit" size={14} /> Editar en tabla</button>
             : <span className="muted small">Toca a un estudiante para ver su perfil</span>}</div>
         {grid ? <GridEditor cls={c} rows={d.rr} onDone={() => setGrid(false)} /> : <div className="stable">
-          <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "CRR")}<span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
+          <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "CRR")}<span className="st-pf-h" title="Índice de perfil de su carrera: da más peso a sus 5 competencias clave">{th("perfil", "Perfil")}</span><span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
           {sorted.map((r) => <StudentRow key={r.r.id} r={r} onOpen={() => openStudent(r.r.id, sorted.map((x) => x.r.id))} />)}
         </div>}
       </section>
@@ -174,6 +174,7 @@ function StudentRow({ r, onOpen }: { r: Row; onOpen(): void }) {
       <span className="st-name"><Avatar name={r.r.nombre} size={28} color={r.cls.color} />{displayName(r.r.nombre)}</span>
       <span className="muted">{r.carrera}</span>
       <span className="st-idx"><b>{fmt(r.indice)}</b><LevelChip v={r.indice} /></span>
+      <span className="st-pf" title={r.perfilCodigo ? `Perfil ${r.perfilCodigo}` : "Su carrera no tiene perfil configurado"}>{r.perfil !== null ? <><b>{fmt(r.perfil)}</b><small>{r.perfilCodigo}</small></> : <span className="muted">—</span>}</span>
       <span className="hide-sm small">{vals[0] && metricName(vals[0].m)}</span>
       <span className="hide-sm small muted">{vals.length > 0 && metricName(vals[vals.length - 1].m)}</span>
     </button>

@@ -4,6 +4,7 @@ import { Avatar, Icon, Segmented } from "../components/ui";
 import { useTheme, type ThemePref } from "../components/Theme";
 import { NIVELES, cargoDe, cargosList, metricDefaultName, metricDesc, metricOverridesRaw } from "../lib/labels";
 import type { Profile, Rol } from "../lib/types";
+import { PerfilesEditor } from "../components/PerfilesEditor";
 import { METRICS_FALLBACK, isRisk, normText } from "../lib/metrics";
 import { cloudConfigured } from "../data/api";
 import { PageHead } from "./Dashboard";
@@ -46,6 +47,7 @@ export default function Ajustes() {
         </section>
 
         {user!.rol === "admin" && <CargosEditor />}
+        {user!.rol === "admin" && <PerfilesEditor />}
         {user!.rol === "admin" && <MetricNamesEditor />}
 
         {user!.rol !== "admin" && <section className="card pad">
