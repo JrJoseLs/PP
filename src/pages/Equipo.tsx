@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useApp } from "../data/store";
+import { useApp, usePref } from "../data/store";
+import { AsignacionRapida } from "../components/Asignacion";
 import { Avatar, Empty, Icon, Modal, Segmented } from "../components/ui";
 import { LevelBar } from "../components/Charts";
 import { avgIndex, fmt, plural } from "../lib/metrics";
@@ -35,7 +36,7 @@ export default function Equipo() {
         <Segmented value={tab} onChange={setTab} options={[{ value: "org", label: rol === "admin" ? "Organización" : `Mis ${low(M().many)}` }, { value: "clases", label: "Acceso a clases" }]} />
       </div>
       {tab === "org" ? (rol === "admin" ? <OrgAdmin onEdit={setEditing} onNew={(d) => { setNewFor(d); setEditing("new"); }} /> : <OrgDecano onEdit={setEditing} />)
-        : <Matrix />}
+        : <AccesoClases />}
       {editing && <UserModal p={editing === "new" ? null : editing} decanoFor={newFor} onClose={() => setEditing(null)} />}
       {bulk && <BulkAccounts onClose={() => setBulk(false)} />}
     </>
@@ -192,6 +193,17 @@ function Matrix() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/* ---------- Acceso a clases: asignación rápida (para muchas clases) o la tabla de siempre ---------- */
+function AccesoClases() {
+  const [vista, setVista] = usePref<"rapida" | "tabla">("accesoVista", "rapida");
+  return (
+    <>
+      <div className="toolbar"><Segmented size="sm" value={vista} onChange={setVista} options={[{ value: "rapida", label: "Asignación rápida" }, { value: "tabla", label: "Tabla" }]} /></div>
+      {vista === "rapida" ? <AsignacionRapida /> : <Matrix />}
     </>
   );
 }
