@@ -42,6 +42,8 @@ export function parseReport(rows: Rows): ParsedReport | null {
     else if (["GRUPO", "SECCION", "NRC", "RNC"].includes(n)) cGrupo = c;
     else if (["ID", "MATRICULA"].includes(n)) cMat = c;
     else if (["EQUIPO", "TEAM", "EMPRESA"].includes(n)) cEquipo = c;
+    // columnas informativas que alguien pudo añadir (o que vienen de otra hoja): no son competencias
+    else if (/^(CORREO|E ?MAIL|INDICE|INDICE GENERAL|CRR|NIVEL|PERFIL|INDICE DE PERFIL|PUESTO|SIMULACION|OBSERVACION|OBSERVACIONES|NOTAS?|COMENTARIOS?)$|^(SCORECARD|TIEMPO|TRIMESTRE)/.test(n)) continue;
     else metricCols.push({ name: String(raw).trim(), c });
   }
   if (!metricCols.length) metricCols = METRICS_FALLBACK.map((m, i) => ({ name: m, c: 2 + i }));
@@ -62,9 +64,10 @@ export function parseReport(rows: Rows): ParsedReport | null {
     students.push({
       nombre: col0.replace(/\s+/g, " "),
       valores: metricCols.map((m) => { const v = r[m.c]; const n = v === undefined || v === null || v === "" ? 0 : Number(v); return isNaN(n) ? 0 : round2(n); }),
-      carrera: cCarrera >= 0 ? cleanCode(r[cCarrera]).toUpperCase() : "",
+      // los códigos (ISO, ADM) se normalizan en mayúsculas; los nombres («Administración») se dejan tal cual
+      carrera: cCarrera >= 0 ? ((v) => (/^[A-Za-z]{2,8}$/.test(v) ? v.toUpperCase() : v))(cleanCode(r[cCarrera]).replace(/\s+/g, " ")) : "",
       grupo: cGrupo >= 0 ? normGroup(r[cGrupo]) : col1Group ? normGroup(col1) : "",
-      equipo: (cEquipo >= 0 ? String(r[cEquipo] ?? "") : col1Team ? col1 : "").replace(/s+/g, " ").trim(),
+      equipo: (cEquipo >= 0 ? String(r[cEquipo] ?? "") : col1Team ? col1 : "").replace(/\s+/g, " ").trim(),
       matricula: cMat >= 0 ? cleanCode(r[cMat]) : "",
     });
   }

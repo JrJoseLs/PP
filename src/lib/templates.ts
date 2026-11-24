@@ -3,7 +3,7 @@
    - Listado de estudiantes: matrícula, nombre, carrera, grupo
    - Cuentas: para crear decanos y maestros en bloque
    Las filas cuyo nombre empieza por "EJEMPLO" se ignoran al importar. */
-import type { Clase, Profile, Resultado, Rol, RosterEntry } from "./types";
+import type { Clase, Desempeno, Profile, Resultado, Rol, RosterEntry } from "./types";
 import { METRICS_FALLBACK, isRisk, normText } from "./metrics";
 import { D, M, low } from "./labels";
 
@@ -56,13 +56,47 @@ export async function downloadReportTemplate() {
 }
 
 /** Descarga una clase con el mismo formato de la plantilla (para editarla y volver a subirla) */
-export async function downloadClase(c: Clase, resultados: Resultado[]) {
+/** Excel de una clase:
+    · «Informe»: el mismo formato de la plantilla; es la ÚNICA hoja que se lee al subirlo corregido.
+    · «Resumen»: índice, nivel, puesto, perfil de carrera y desempeño del juego de cada estudiante (solo lectura).
+    · «Juego»: todos los jugadores del informe del juego, con su tiempo por trimestre y si completaron (solo lectura). */
+export async function downloadClase(c: Clase, rows: ClaseRow[], juego?: ClaseJuego) {
   const X = await xlsx();
-  const rows: Cell[][] = [REPORT_HEAD.concat(c.metrics), ...resultados.map((r) =>
+  const informe: Cell[][] = [REPORT_HEAD.concat(c.metrics), ...rows.map(({ r }) =>
     [r.nombre, r.equipo ?? "", r.grupo || c.grupo, r.matricula, r.carrera, ...c.metrics.map((_, i) => r.valores[i] ?? null)] as Cell[])];
-  save(X, [["Informe", sheet(X, rows, [32, 18, 9, 12, 10, ...c.metrics.map((x) => Math.max(10, Math.min(22, x.length + 2)))])],
-    ["Instrucciones", sheet(X, reportInstructions(c.metrics), [4, 110])]], safeName(c.nombre) + ".xlsx");
+  const r1 = (v: number | null | undefined) => (typeof v === "number" ? Math.round(v * 10) / 10 : null);
+  const orden = [...rows].filter((x) => x.indice !== null).sort((a, b) => b.indice! - a.indice!);
+  const nivel = (v: number | null) => (v === null ? "" : v >= 66 ? "Alto" : v >= 34 ? "Medio" : "Bajo");
+  const resumen: Cell[][] = [["Estudiante", "Matrícula", "Carrera", "Grupo", "Equipo", "Índice", "Nivel", "Puesto en la clase", "Perfil", "Índice de perfil",
+    "Scorecard acumulado", "Tiempo en el juego [min]", "Trimestres jugados", "Simulación", "Correo"],
+    ...rows.map((x) => {
+      const j = x.juego ?? x.juegoParcial;
+      return [x.r.nombre, x.r.matricula, x.carrera, x.grupo, x.equipo, r1(x.indice), nivel(x.indice), x.indice !== null ? orden.indexOf(x) + 1 : null,
+        x.perfilCodigo ?? "", r1(x.perfil), r1(j?.bsc_acum), j?.minutos != null ? Math.round(j.minutos) : null,
+        j ? Math.max(j.trimestres ?? 0, ...(j.historial ?? []).map((p) => p.t)) || null : null,
+        x.juego ? "Completa" : x.juegoParcial ? "Incompleta" : "", j?.email ?? ""] as Cell[];
+    })];
+  const hojas: [string, ReturnType<typeof sheet>][] = [
+    ["Informe", sheet(X, informe, [32, 18, 9, 12, 10, ...c.metrics.map((x) => Math.max(10, Math.min(22, x.length + 2)))])],
+    ["Resumen", sheet(X, resumen, [32, 12, 22, 9, 18, 9, 8, 10, 8, 10, 11, 12, 10, 12, 28])],
+  ];
+  if (juego && (juego.jugadores.length || juego.equipos.length)) {
+    const n = Math.max(0, ...juego.jugadores.map((j) => j.tiempos?.length ?? 0));
+    const estado = new Map<string, string>();
+    juego.completos.forEach((j) => estado.set(j.id, "Completó"));
+    juego.incompletos.forEach((i) => estado.set(i.d.id, i.motivo === "trimestres" ? "No completó" : "Sin informe de competencias"));
+    const jug: Cell[][] = [["Jugador", "Correo", "Equipo", "Trimestres jugados", "Scorecard acumulado", "Tiempo total [min]", ...Array.from({ length: n }, (_, k) => `T${k + 1} [min]`), "Estado"],
+      ...juego.jugadores.map((j) => [j.nombre, j.email, j.equipo, Math.max(j.trimestres ?? 0, ...(j.historial ?? []).map((p) => p.t)) || null, r1(j.bsc_acum),
+        j.minutos != null ? Math.round(j.minutos) : null, ...Array.from({ length: n }, (_, k) => (j.tiempos?.[k] != null ? Math.round(j.tiempos[k]) : null)), estado.get(j.id) ?? ""] as Cell[])];
+    hojas.push(["Juego", sheet(X, jug, [30, 28, 20, 10, 11, 12, ...Array.from({ length: n }, () => 9), 22])]);
+  }
+  hojas.push(["Instrucciones", sheet(X, [...reportInstructions(c.metrics), [],
+    ["", "Al subirlo con «Subir corregido» solo se lee la hoja «Informe». «Resumen» y «Juego» son informativas: sus cambios no se guardan."]], [4, 110])]);
+  save(X, hojas, safeName(c.nombre) + ".xlsx");
 }
+/* Tipos mínimos que necesita la descarga (evitan importar la tienda de datos desde aquí) */
+type ClaseRow = { r: Resultado; indice: number | null; perfil: number | null; perfilCodigo: string | null; carrera: string; grupo: string; equipo: string; juego?: Desempeno; juegoParcial?: Desempeno };
+type ClaseJuego = { jugadores: Desempeno[]; equipos: unknown[]; completos: Desempeno[]; incompletos: { d: Desempeno; motivo: string }[] };
 
 /* ---------- Directorio de estudiantes ---------- */
 const DIR_HEAD = ["Matrícula", "Nombres", "Apellidos", "Carrera", "Grupo", "Equipo del juego", "Correo", "Licencia del juego"];

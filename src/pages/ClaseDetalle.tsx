@@ -62,7 +62,7 @@ export default function ClaseDetalle() {
       <PageHead eyebrow={<><span className="dot" style={{ background: c.color }} /> Grupo {c.grupo || "—"}{c.periodo ? " · " + c.periodo : ""}</>}
         title={c.nombre} sub={c.archivo ? <span className="muted small">Archivo: {c.archivo}</span> : undefined}
         actions={<>
-          <button className="btn" onClick={() => downloadClase(c, d.rr.map((r) => r.r))} title="Mismo formato que la plantilla: corrígelo y súbelo con «Subir corregido»"><Icon name="download" size={16} /> Descargar Excel</button>
+          <button className="btn" onClick={() => downloadClase(c, d.rr, juego)} title="Incluye el informe (para corregir y subir con «Subir corregido»), un resumen por estudiante y el desempeño del juego"><Icon name="download" size={16} /> Descargar Excel</button>
           {rol === "admin" && <ReuploadButton cls={c} rows={d.rr} />}
           <button className="btn" onClick={() => go("/comparar?add=" + encodeURIComponent("clase:" + c.id))}><Icon name="compare" size={16} /> Comparar</button>
           {rol === "admin" && <button className="btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Editar</button>}
