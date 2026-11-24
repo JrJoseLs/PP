@@ -85,13 +85,21 @@ export async function downloadClase(c: Clase, rows: ClaseRow[], juego?: ClaseJue
     const estado = new Map<string, string>();
     juego.completos.forEach((j) => estado.set(j.id, "Completó"));
     juego.incompletos.forEach((i) => estado.set(i.d.id, i.motivo === "trimestres" ? "No completó" : "Sin informe de competencias"));
-    const jug: Cell[][] = [["Jugador", "Correo", "Equipo", "Trimestres jugados", "Scorecard acumulado", "Tiempo total [min]", ...Array.from({ length: n }, (_, k) => `T${k + 1} [min]`), "Estado"],
+    // mismos encabezados que entiende Importar: este Excel sirve también para recrear la clase con su desempeño
+    const jug: Cell[][] = [["Nombre", "Correo", "Equipo", "Trimestres jugados", "Scorecard acumulado", "Tiempo total [min]", ...Array.from({ length: n }, (_, k) => `Trimestre ${k + 1}`), "Estado"],
       ...juego.jugadores.map((j) => [j.nombre, j.email, j.equipo, Math.max(j.trimestres ?? 0, ...(j.historial ?? []).map((p) => p.t)) || null, r1(j.bsc_acum),
         j.minutos != null ? Math.round(j.minutos) : null, ...Array.from({ length: n }, (_, k) => (j.tiempos?.[k] != null ? Math.round(j.tiempos[k]) : null)), estado.get(j.id) ?? ""] as Cell[])];
     hojas.push(["Juego", sheet(X, jug, [30, 28, 20, 10, 11, 12, ...Array.from({ length: n }, () => 9), 22])]);
+    // datos por equipo, tal como vienen del juego (para recrear la clase sin perder el Scorecard de cada equipo)
+    const ne = Math.max(0, ...juego.equipos.map((e) => (e as { tiempos?: number[] | null }).tiempos?.length ?? 0));
+    const eqs: Cell[][] = [["Empresa", "Trimestres jugados", "Scorecard acumulado", "Tiempo total [min]", ...Array.from({ length: ne }, (_, k) => `Trimestre ${k + 1}`)],
+      ...(juego.equipos as { equipo: string; trimestres: number | null; bsc_acum: number | null; minutos: number | null; tiempos?: number[] | null }[]).map((e) =>
+        [e.equipo, e.trimestres, r1(e.bsc_acum), e.minutos != null ? Math.round(e.minutos) : null, ...Array.from({ length: ne }, (_, k) => (e.tiempos?.[k] != null ? Math.round(e.tiempos[k]) : null))] as Cell[])];
+    if (juego.equipos.length) hojas.push(["Equipos", sheet(X, eqs, [24, 10, 11, 12, ...Array.from({ length: ne }, () => 9)])]);
   }
   hojas.push(["Instrucciones", sheet(X, [...reportInstructions(c.metrics), [],
-    ["", "Al subirlo con «Subir corregido» solo se lee la hoja «Informe». «Resumen» y «Juego» son informativas: sus cambios no se guardan."]], [4, 110])]);
+    ["", "Al subirlo con «Subir corregido» solo se lee la hoja «Informe». «Resumen» y «Juego» son informativas: sus cambios no se guardan."],
+    ["", "Respaldo: si subes este archivo en Importar, se crea la clase con sus estudiantes, competencias y el desempeño del juego (hoja «Juego»)."]], [4, 110])]);
   save(X, hojas, safeName(c.nombre) + ".xlsx");
 }
 /* Tipos mínimos que necesita la descarga (evitan importar la tienda de datos desde aquí) */

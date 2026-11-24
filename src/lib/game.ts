@@ -86,6 +86,8 @@ export function parseIgrades(book: Record<string, Rows>): Igrades | null {
       const e = map.get(j.equipo) ?? { equipo: j.equipo, trimestres: j.trimestres, bsc_acum: j.bsc_acum, bsc: j.bsc, minutos: 0, percentil: null, puntaje: j.puntaje, tiempos: null, historial: j.historial ?? null };
       e.minutos = (e.minutos ?? 0) + (j.minutos ?? 0);
       if (j.tiempos) e.tiempos = j.tiempos.map((v, k) => v + (e.tiempos?.[k] ?? 0));
+      // el equipo llega hasta donde llegó su jugador más avanzado (y su Scorecard es el de ese corte)
+      if ((j.trimestres ?? 0) > (e.trimestres ?? 0)) { e.trimestres = j.trimestres; e.bsc_acum = j.bsc_acum; e.bsc = j.bsc; e.historial = j.historial ?? e.historial; }
       map.set(j.equipo, e);
     });
     out.equipos = [...map.values()];

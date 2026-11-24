@@ -163,6 +163,9 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
         const book = await readBook(file);
         const ig = parseIgrades(book);   // informe igrades: desempeño en el juego (tiempo, Scorecard, puntajes)
         if (ig) nuevosJuegos.push(newGameJob(file.name, ig));
+        // el Excel descargado de una clase trae su informe Y su desempeño del juego: se importan los dos
+        const informe = ig ? Object.values(book).find((rows) => detectFile(rows, conocidas).kind === "informe") : undefined;
+        if (informe) parsed.push({ file, rows: informe });
         // la lista puede estar en cualquier hoja: se usa la primera que se reconozca
         else parsed.push({ file, rows: Object.values(book).find((rows) => detectFile(rows, conocidas).kind !== "desconocido") ?? Object.values(book)[0] ?? [] });
       } catch (e) { toast(`No pude leer "${file.name}": ${friendlyError(e)}`, "error"); }
@@ -214,6 +217,9 @@ function ImportTab({ roster, persist, jobs, setJobs, drafts, setDrafts, goDir, i
         if (j.saved || games.some((g) => g.key === j.key && g.target)) return j;
         // la extensión indicó la clase de Marketplace: se usa para el informe que acaba de llegar
         if (pista && j.files.some((f) => nuevos.has(f))) return { ...j, ...destinoPorPista(j, pista, [...drafts, ...nd]) };
+        // informe y juego en el mismo archivo (Excel descargado de una clase): van juntos a la misma clase
+        const mismo = nd.find((d) => d.archivo === j.fileName);
+        if (mismo) return { ...j, target: "draft:" + mismo.key };
         return { ...j, target: suggestTarget(j.data, cls, drs) };
       }));
       toast(`Desempeño del juego: ${plural(unidos.filter((j) => !games.includes(j)).reduce((a, j) => a + j.data.jugadores.length, 0), "jugador", "jugadores")}${n ? ` · ${plural(n, "informe unido", "informes unidos")} al de su mismo juego` : ""}. Revisa a qué clase pertenece.`);

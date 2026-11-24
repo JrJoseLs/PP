@@ -221,8 +221,28 @@ export function PersonChip({ p, on, onClick, sub }: { p: Profile; on: boolean; o
 }
 
 function EditClase({ c, onClose, onDelete }: { c: Clase; onClose(): void; onDelete(): void }) {
-  const { run } = useApp();
+  const { run, api, snap, juegoByClase, refresh, toast } = useApp();
+  const go = useNavigate();
   const [f, setF] = useState({ nombre: c.nombre, grupo: c.grupo, periodo: c.periodo, color: c.color });
+  const [dup, setDup] = useState(false);
+  /** Copia exacta: estudiantes y competencias, desempeño del juego (con su historial) y quién tiene acceso. La original no cambia. */
+  const duplicar = async () => {
+    setDup(true);
+    try {
+      const nombres = new Set(snap.clases.map((x) => x.nombre));
+      let nombre = `${c.nombre} (copia)`; for (let i = 2; nombres.has(nombre); i++) nombre = `${c.nombre} (copia ${i})`;
+      const estudiantes = snap.resultados.filter((r) => r.clase_id === c.id).map(({ id: _i, clase_id: _c, ...r }) => r);
+      const id = await api.importClase({ nombre, grupo: c.grupo, periodo: c.periodo, color: c.color, metrics: c.metrics, archivo: c.archivo ?? "", estudiantes, decanos: c.decanos });
+      if (c.maestros.length) await api.setClaseMaestros(id, c.maestros);
+      const j = juegoByClase.get(c.id);
+      if (j && (j.jugadores.length || j.equipos.length))
+        await api.saveDesempeno(id, j.jugadores.map(({ id: _i, clase_id: _c, ...x }) => x), j.equipos.map(({ clase_id: _c, ...x }) => x));
+      await refresh();
+      toast(`Clase duplicada como «${nombre}»`);
+      onClose(); go("/clases/" + id);
+    } catch (e) { toast((e as Error).message, "error"); }
+    setDup(false);
+  };
   return (
     <Modal open title="Editar clase" onClose={onClose}>
       <form className="form" onSubmit={async (e) => { e.preventDefault(); await run((a) => a.updateClase(c.id, f), "Clase actualizada"); onClose(); }}>
@@ -235,6 +255,7 @@ function EditClase({ c, onClose, onDelete }: { c: Clase; onClose(): void; onDele
           <button type="button" key={p} className={"swatch" + (f.color === p ? " on" : "")} style={{ background: p }} onClick={() => setF({ ...f, color: p })} aria-label={p} />))}</div></div>
         <div className="modal-actions">
           <button type="button" className="btn danger ghost" onClick={onDelete}><Icon name="trash" size={16} /> Eliminar</button>
+          <button type="button" className="btn ghost" disabled={dup} onClick={duplicar} title="Crea una copia con sus estudiantes, competencias, desempeño del juego y accesos">{dup ? <span className="spinner" /> : <><Icon name="plus" size={16} /> Duplicar</>}</button>
           <span className="grow" />
           <button type="button" className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn primary">Guardar</button>
