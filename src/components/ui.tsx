@@ -30,6 +30,7 @@ const P: Record<string, ReactNode> = {
   cloud: <path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9Z" />,
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7Z" />,
   edit: <><path d="M4 20h4L19 9l-4-4L4 16Z" /><path d="m14 6 4 4" /></>,
+  report: <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5M10 13h6M10 17h6M10 9h2" /></>,
   eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
 };
 export function Icon({ name, size = 20, className }: { name: keyof typeof P | string; size?: number; className?: string }) {

@@ -7,12 +7,14 @@ import { cargoDe } from "../lib/labels";
 import { displayName, normText } from "../lib/metrics";
 import StudentSheet from "./StudentSheet";
 import { ThemeButton } from "./Theme";
+import { puedeVerReporte } from "../lib/permisos";
 
 export const NAV: { to: string; label: string; icon: string; roles: Rol[] }[] = [
   { to: "/", label: "Inicio", icon: "home", roles: ["admin", "decano", "maestro"] },
   { to: "/clases", label: "Clases", icon: "classes", roles: ["admin", "decano", "maestro"] },
   { to: "/comparar", label: "Comparar", icon: "compare", roles: ["admin", "decano", "maestro"] },
   { to: "/estudiantes", label: "Estudiantes", icon: "students", roles: ["admin", "decano", "maestro"] },
+  { to: "/reporte", label: "Reporte", icon: "report", roles: ["admin", "decano"] },
   { to: "/equipo", label: "Equipo", icon: "team", roles: ["admin", "decano"] },
   { to: "/importar", label: "Importar", icon: "upload", roles: ["admin"] },
   { to: "/ajustes", label: "Ajustes", icon: "settings", roles: ["admin", "decano", "maestro"] },
@@ -23,11 +25,12 @@ const ShellCtx = createContext<Shell>({ openStudent: () => {}, openPalette: () =
 export const useShell = () => useContext(ShellCtx);
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { user, api, setUser, loading } = useApp();
+  const { user, api, setUser, loading, snap } = useApp();
   const [student, setStudent] = useState<{ id: string; list: string[] } | null>(null);
   const [palette, setPalette] = useState(false);
   const loc = useLocation();
-  const nav = NAV.filter((n) => user && n.roles.includes(user.rol));
+  // el reporte ejecutivo: administración siempre; coordinadores solo si administración lo permite
+  const nav = NAV.filter((n) => user && n.roles.includes(user.rol) && (n.to !== "/reporte" || puedeVerReporte(user.rol, snap.ajustes)));
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {

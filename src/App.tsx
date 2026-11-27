@@ -14,6 +14,7 @@ const Estudiantes = lazy(() => import("./pages/Estudiantes"));
 const Equipo = lazy(() => import("./pages/Equipo"));
 const Importar = lazy(() => import("./pages/Importar"));
 const Ajustes = lazy(() => import("./pages/Ajustes"));
+const Reporte = lazy(() => import("./pages/Reporte"));
 
 function Guard({ roles, children }: { roles: Rol[]; children: JSX.Element }) {
   const { user } = useApp();
@@ -35,6 +36,7 @@ function Routed() {
           <Route path="/estudiantes" element={<Estudiantes />} />
           <Route path="/equipo" element={<Guard roles={["admin", "decano"]}><Equipo /></Guard>} />
           <Route path="/importar" element={<Guard roles={["admin"]}><Importar /></Guard>} />
+          <Route path="/reporte" element={<Guard roles={["admin", "decano"]}><Reporte /></Guard>} />
           <Route path="/ajustes" element={<Ajustes />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
