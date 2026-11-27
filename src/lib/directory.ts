@@ -107,6 +107,9 @@ export function detectFile(rows: Rows, conocidas?: Set<string>): FileKind {
     if (c >= 0 && !pareceNombre(primera)) { const m0 = guessMapping(rows, 0, conocidas); if (util(m0)) return { kind: "listado", header: 0, mapping: m0 }; }
     return { kind: "listado", header: -1, mapping: m };
   }
+  // la primera fila puede ser un encabezado que no dice nada y estropear la lectura por contenido: se prueba saltándola
+  const m0 = guessMapping(rows, 0, conocidas);
+  if (util(m0)) return { kind: "listado", header: 0, mapping: m0 };
   return { kind: "desconocido" };
 }
 
