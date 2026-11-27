@@ -4,7 +4,7 @@ import { Avatar, Delta, Icon, LevelChip, Segmented, Sheet } from "./ui";
 import { Radar, type Series } from "./Radar";
 import { Ring } from "./Charts";
 import { SIN_CARRERA, avgVector, displayName, fmt, isRisk, mean, metricValue, normText, personKey, sparseMetrics, type Row } from "../lib/metrics";
-import { perfilesCfg } from "../lib/perfiles";
+import { perfilesActuales } from "../lib/perfiles";
 import { metricDesc, metricName } from "../lib/labels";
 import { EditStudentModal } from "./ClassEditor";
 import { StudentGame, StudentGamePartial } from "./GameCharts";
@@ -56,9 +56,9 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
     return v === null || o.length < 3 ? null : Math.round((o.filter((x) => x < v).length / (o.length - 1)) * 100);
   };
   const pctCarrera = data.conCarrera ? pctl(row.indice, data.carRows.map((x) => x.indice)) : null;
-  const perfilGrupo = row.perfilCodigo ? rows.filter((x) => x.perfilCodigo === row.perfilCodigo) : [];
-  const pctPerfil = pctl(row.perfil, perfilGrupo.map((x) => x.perfil));
-  const pf = row.perfilCodigo ? perfilesCfg().perfiles[row.perfilCodigo] : null;
+  const pf = row.perfilCodigo ? perfilesActuales()[row.perfilCodigo] : null;
+  // puntos de cada competencia en el perfil de su carrera (para el radar y la lista de claves)
+  const pesoDe = (m: string) => pf?.pesos[normText(m)] ?? 0;
 
   return (
     <Sheet open onClose={onClose} wide title={
@@ -86,10 +86,10 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
           <div><LevelChip v={row.indice} /><small>{data.rank ? `#${data.rank} de ${data.total}` : ""}{pct !== null ? ` · mejor que el ${pct}% de la clase` : ""}</small>
             {pctCarrera !== null && <small>mejor que el {pctCarrera}% de {row.carrera}</small>}</div>
         </div>
-        {row.perfil !== null && pf && (
-          <div className="st-perfil" title={`Índice de perfil de ${pf.nombre}: ${Math.round(perfilesCfg().peso * 100)} % sus 5 competencias clave y ${Math.round((1 - perfilesCfg().peso) * 100)} % las demás`}>
-            <small>Perfil {row.perfilCodigo}</small><b>{fmt(row.perfil)}</b>
-            {pctPerfil !== null && <small>mejor que el {pctPerfil}% de su carrera</small>}
+        {pf && (
+          <div className="st-perfil" title={`El CRR de este estudiante se calcula con el perfil de ${pf.nombre}: sus claves pesan más. El índice general es el promedio simple, sin ponderar.`}>
+            <small>CRR ponderado · {row.perfilCodigo}</small>
+            <span className="st-perfil-v"><small>General sin ponderar</small><b>{fmt(row.general)}</b></span>
           </div>
         )}
       </div>
@@ -107,12 +107,12 @@ export default function StudentSheet({ id, list, onNav, onClose }: { id: string;
         {data.conCarrera && data.mismaGente && modo !== "clase" && <p className="muted small">Todos los de {row.carrera} están en esta clase: el promedio de la carrera coincide con el de la clase y las dos líneas se superponen.</p>}
         {pf && (
           <div className="claves">
-            <span className="muted small">★ Clave para {pf.nombre}:</span>
-            {pf.claves.map((k) => { const v = metricValue(row, data.m.find((m) => normText(m) === normText(k)) ?? k); const i = data.m.findIndex((m) => normText(m) === normText(k)); const a = i >= 0 ? data.clsAvg[i] : null;
-              return <span key={k} className="clave" title={metricDesc(k)}>{metricName(k)} <b>{fmt(v)}</b>{v !== null && a !== null && <Delta v={v - a} />}</span>; })}
+            <span className="muted small">★ Lo que más pesa en {pf.nombre}:</span>
+            {pf.claves.map((k: string) => { const v = metricValue(row, data.m.find((m) => normText(m) === normText(k)) ?? k); const i = data.m.findIndex((m) => normText(m) === normText(k)); const a = i >= 0 ? data.clsAvg[i] : null;
+              return <span key={k} className="clave" title={`${metricDesc(k)} · pesa ${pesoDe(k)} de 100 puntos`}>{metricName(k)} <b>{fmt(v)}</b>{v !== null && a !== null && <Delta v={v - a} invert={isRisk(k)} />}<i className="clave-pts">{pesoDe(k)} pts</i></span>; })}
           </div>
         )}
-        <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} destacar={pf?.claves} />
+        <Radar labels={data.labels} series={series} size={520} invert={invert} onInvert={setInvert} destacar={pf?.claves} pesos={pf?.pesos} />
       </div>}
 
       {/* después del perfil de competencias, su desempeño en el juego */}

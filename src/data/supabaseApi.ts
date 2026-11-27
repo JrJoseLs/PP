@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Api } from "./api";
-import type { Ajustes, Carrera, Clase, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Ajustes, Carrera, Clase, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot, PerfilCarrera } from "../lib/types";
 
 // Nombre de la Edge Function de cuentas en Supabase (ver supabase/functions/manage-users)
 const USERS_FN = "clever-action";
@@ -52,12 +52,15 @@ export class SupabaseApi implements Api {
       this.all<{ clase_id: string; maestro_id: string }>("clase_maestros", "clase_id,maestro_id"),
     ]);
     const [desempeno, desempenoEquipos] = await Promise.all([this.optional<Desempeno>("desempeno"), this.optional<DesempenoEquipo>("desempeno_equipos")]);
+    // perfiles por carrera: si falta la migración 007, la app sigue con los perfiles de partida
+    let perfiles: PerfilCarrera[] = [], perfilesListos = true;
+    try { perfiles = await this.all<PerfilCarrera>("perfiles_carrera"); } catch { perfilesListos = false; }
     const clases: Clase[] = clasesRaw.map((c) => ({
       ...c,
       decanos: cd.filter((x) => x.clase_id === c.id).map((x) => x.decano_id),
       maestros: cm.filter((x) => x.clase_id === c.id).map((x) => x.maestro_id),
     })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
-    return { profiles, clases, resultados, carreras, ajustes: await this.loadAjustes(), desempeno, desempenoEquipos };
+    return { profiles, clases, resultados, carreras, ajustes: await this.loadAjustes(), desempeno, desempenoEquipos, perfiles, perfilesListos };
   }
 
   private async fn(body: Record<string, unknown>) {
@@ -83,6 +86,7 @@ export class SupabaseApi implements Api {
   }
   async updateProfile(id: string, patch: Partial<Profile>) {
     const { error } = await this.sb.from("profiles").update(patch).eq("id", id);
+    if (error && /carreras/i.test(error.message)) throw new Error("Falta actualizar la base de datos: ejecuta supabase/migrations/007_perfiles_carrera.sql en el SQL Editor de Supabase.");
     if (error && /cargo/i.test(error.message)) throw new Error("Falta actualizar la base de datos: ejecuta supabase/migrations/006_cargos.sql en el SQL Editor de Supabase.");
     if (error) throw error;
   }
@@ -145,6 +149,16 @@ export class SupabaseApi implements Api {
     const { error } = await this.sb.from("ajustes").upsert({ clave, valor, updated_at: new Date().toISOString() });
     if (error) throw new Error(/ajustes/.test(error.message) && /exist|find|schema/i.test(error.message)
       ? "Falta crear la tabla de ajustes: ejecuta supabase/migrations/002_ajustes.sql en el SQL Editor de Supabase." : error.message);
+  }
+  async savePerfil(p: PerfilCarrera) {
+    const { actualizado_por: _a, actualizado_en: _b, ...fila } = p;
+    const { error } = await this.sb.from("perfiles_carrera").upsert(fila);
+    if (error) throw new Error(/perfiles_carrera|relation/i.test(error.message) ? "Falta actualizar la base de datos: ejecuta supabase/migrations/007_perfiles_carrera.sql en el SQL Editor de Supabase."
+      : /row-level|policy/i.test(error.message) ? `No tienes permiso para editar el perfil de ${p.codigo}.` : error.message);
+  }
+  async deletePerfil(codigo: string) {
+    const { error } = await this.sb.from("perfiles_carrera").delete().eq("codigo", codigo);
+    if (error) throw error;
   }
   async upsertCarreras(list: Carrera[]) {
     const { error } = await this.sb.from("carreras").upsert(list);

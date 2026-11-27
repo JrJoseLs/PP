@@ -9,6 +9,8 @@ export interface Profile {
   activo: boolean;
   /** Cargo visible (Docente invitado, Investigador…). El permiso lo da «rol». */
   cargo?: string | null;
+  /** Coordinadores: carreras a su cargo (pueden editar su perfil de ponderación) */
+  carreras?: string[];
 }
 
 export interface Clase {
@@ -87,6 +89,18 @@ export interface DesempenoEquipo {
 }
 
 /** Lo que el usuario actual puede ver (ya filtrado por permisos) */
+/** Perfil de ponderación de una carrera, tal como se guarda (tabla perfiles_carrera) */
+export interface PerfilCarrera {
+  codigo: string;
+  nombre: string;
+  claves: string[];
+  pesos: Record<string, number>;
+  modo: "auto" | "manual";
+  pct_claves: number;
+  actualizado_por?: string | null;
+  actualizado_en?: string | null;
+}
+
 export interface Snapshot {
   profiles: Profile[];
   clases: Clase[];
@@ -95,6 +109,10 @@ export interface Snapshot {
   ajustes: Ajustes;
   desempeno: Desempeno[];
   desempenoEquipos: DesempenoEquipo[];
+  /** Perfiles de ponderación por carrera (vacío si aún no se ejecutó la migración 007) */
+  perfiles: PerfilCarrera[];
+  /** false si la base aún no tiene la tabla perfiles_carrera */
+  perfilesListos?: boolean;
 }
 
 export interface NewUser {

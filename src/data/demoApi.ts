@@ -2,7 +2,7 @@
    políticas RLS de supabase/migrations/001_esquema.sql, para que el modo
    demo muestre fielmente lo que cada rol puede ver y hacer. */
 import type { Api } from "./api";
-import type { Carrera, Clase, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, Clase, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot, PerfilCarrera } from "../lib/types";
 import { buildDemo, type DemoDb } from "./demoSeed";
 
 const DB_KEY = "pp_demo_db_v1";
@@ -65,7 +65,8 @@ export class DemoApi implements Api {
     })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
     const ids = new Set(clases.map((c) => c.id));
     return { profiles, clases, resultados: this.db.resultados.filter((r) => ids.has(r.clase_id)), carreras: this.db.carreras, ajustes: this.db.ajustes ?? {},
-      desempeno: (this.db.desempeno ?? []).filter((x) => ids.has(x.clase_id)), desempenoEquipos: (this.db.desempenoEquipos ?? []).filter((x) => ids.has(x.clase_id)) };
+      desempeno: (this.db.desempeno ?? []).filter((x) => ids.has(x.clase_id)), desempenoEquipos: (this.db.desempenoEquipos ?? []).filter((x) => ids.has(x.clase_id)),
+      perfiles: this.db.perfiles ?? [], perfilesListos: true };
   }
 
   async createUser(n: NewUser) {
@@ -188,6 +189,24 @@ export class DemoApi implements Api {
     await wait(80);
     if (!this.isAdmin()) deny();
     this.db.ajustes = { ...(this.db.ajustes ?? {}), [clave]: valor };
+    this.save();
+  }
+  /** Igual que en la base: administración o el coordinador con esa carrera a su cargo */
+  private puedeEditarPerfil(codigo: string) {
+    const u = this.user, yo = this.db.profiles.find((p) => p.id === u.id);
+    return u.rol === "admin" || (u.rol === "decano" && (yo?.carreras ?? []).some((c) => c.toUpperCase() === codigo.toUpperCase()));
+  }
+  async savePerfil(p: PerfilCarrera) {
+    await wait(80);
+    if (!this.puedeEditarPerfil(p.codigo)) throw new Error(`No tienes permiso para editar el perfil de ${p.codigo}.`);
+    const fila = { ...p, actualizado_por: this.user.id, actualizado_en: new Date().toISOString() };
+    this.db.perfiles = [...(this.db.perfiles ?? []).filter((x) => x.codigo !== p.codigo), fila];
+    this.save();
+  }
+  async deletePerfil(codigo: string) {
+    await wait(60);
+    if (!this.puedeEditarPerfil(codigo)) deny();
+    this.db.perfiles = (this.db.perfiles ?? []).filter((x) => x.codigo !== codigo);
     this.save();
   }
   async upsertCarreras(list: Carrera[]) {

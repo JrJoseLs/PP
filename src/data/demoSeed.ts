@@ -1,6 +1,6 @@
 /* Datos de ejemplo: 4 decanos, 16 maestros, 16 clases, ~400 estudiantes.
    Generados con semilla fija para que todos vean lo mismo. Nada es real. */
-import type { Ajustes, Carrera, Clase, Desempeno, DesempenoEquipo, Profile, Resultado, RosterEntry } from "../lib/types";
+import type { Ajustes, Carrera, Clase, Desempeno, DesempenoEquipo, Profile, Resultado, RosterEntry, PerfilCarrera } from "../lib/types";
 import { METRICS_FALLBACK, displayName, isRisk, normText } from "../lib/metrics";
 
 export interface DemoDb {
@@ -13,6 +13,7 @@ export interface DemoDb {
   ajustes?: Ajustes;
   desempeno?: Desempeno[];
   desempenoEquipos?: DesempenoEquipo[];
+  perfiles?: PerfilCarrera[];
 }
 
 function rng(seed: number) {

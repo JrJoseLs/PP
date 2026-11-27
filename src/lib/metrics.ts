@@ -64,10 +64,11 @@ export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 
 export interface Row {
   r: Resultado;
   cls: Clase;
+  /** CRR: ponderado con el perfil de su carrera (o el índice general si su carrera no tiene perfil) */
   indice: number | null;
-  /** Índice de perfil de carrera (pondera las 5 competencias clave de su carrera); null si su carrera no tiene perfil */
-  perfil: number | null;
-  /** Código del perfil usado («ISO» para ISO e ISOR) */
+  /** Índice general sin ponderar: promedio simple de las competencias positivas (para comparar entre carreras) */
+  general: number | null;
+  /** Código del perfil con que se ponderó («ISO» para ISO e ISOR); null si no tiene */
   perfilCodigo: string | null;
   carrera: string;     // etiqueta visible
   grupo: string;

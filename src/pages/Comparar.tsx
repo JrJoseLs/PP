@@ -14,6 +14,7 @@ import { SERIES_COLORS, byClase, byDecano, byField, byMaestro, type Group } from
 import { PageHead } from "./Dashboard";
 import FilterBar from "../components/FilterBar";
 import { GameBars } from "../components/GameCharts";
+import { ResaltarPerfil, perfilElegido, perfilPredominante } from "../components/ResaltarPerfil";
 import { useScoped } from "../lib/scope";
 import { D, M, metricDesc, metricName } from "../lib/labels";
 
@@ -30,6 +31,7 @@ export default function Comparar() {
   const [saved, setSaved] = usePref<string[]>("cmpSel_" + user!.id, []);
   const [view, setView] = usePref<"radar" | "barras" | "tabla" | "juego">("cmpView", "radar");
   const [invert, setInvert] = usePref("radarInvert", true);
+  const [resaltar, setResaltar] = useState<string | null | undefined>(undefined);
   const [tipo, setTipo] = usePref<Tipo>("cmpTipo_" + user!.id, user!.rol === "maestro" ? "clase" : "maestro");
   const [orden, setOrden] = usePref<"indice" | "nombre">("cmpOrden", "indice");
   const [q, setQ] = useState("");
@@ -101,6 +103,8 @@ export default function Comparar() {
   const labels = hideSparse ? metrics.filter((m) => !sparse.has(m)) : metrics;
   const vecFor = (v: (number | null)[]) => labels.map((m) => v[metrics.indexOf(m)]);
   const series: Series[] = chosen.map((g) => ({ name: g.label, color: g.color, values: vecFor(g.vector) as number[], index: g.idx }));
+  // si casi todo lo comparado es de una misma carrera, se resaltan sus claves
+  const resaltarK = resaltar === undefined ? perfilPredominante(chosen.flatMap((g) => g.rows as Row[]), 0.6) : resaltar;
   const tipoLabel = tipos.find((t) => t.value === tipoOk)?.label.toLowerCase() ?? "";
 
   if (!snapAll.clases.length) return <><PageHead title="Comparar" /><Empty icon="compare" title="No hay datos para comparar todavía" /></>;
@@ -183,7 +187,10 @@ export default function Comparar() {
                   ...(allRows.some((r) => r.juego) ? [{ value: "juego" as const, label: "Juego" }] : [])]} />
                 <label className="switch-label"><input type="checkbox" className="switch" checked={hideSparse} onChange={(e) => setHideSparse(e.target.checked)} /> Ocultar competencias casi vacías</label>
               </div>
-              {view === "radar" && <Radar labels={labels} series={series} invert={invert} onInvert={setInvert} size={600} title="comparacion" />}
+              {view === "radar" && <>
+                <ResaltarPerfil value={resaltarK} onChange={setResaltar} rows={chosen.flatMap((g) => g.rows as Row[])} />
+                <Radar labels={labels} series={series} invert={invert} onInvert={setInvert} size={600} title="comparacion" destacar={perfilElegido(resaltarK)?.claves} pesos={perfilElegido(resaltarK)?.pesos} />
+              </>}
               {view === "barras" && <MetricBars labels={labels} series={series} />}
               {view === "juego" && <GameBars series={chosen.map((g) => ({ name: g.label, color: g.color, rows: g.rows as Row[] }))} />}
               {view === "tabla" && <DiffTable labels={labels} chosen={chosen.map((g) => ({ label: g.label, color: g.color, values: vecFor(g.vector) }))} />}

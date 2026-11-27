@@ -1,140 +1,207 @@
-/* Ajustes → Carreras y perfiles (solo administración).
-   Una fila por carrera que aparece en tus datos (las nuevas salen solas al importar):
-   - su nombre visible: se guarda en el catálogo de carreras y se ve en toda la app;
-   - su perfil: las 5 competencias clave del índice de perfil. Las variantes con R o S al final
-     (ISOR, ATHS…) usan el perfil de su carrera base, salvo que se les cree uno propio. */
+/* Ajustes → Carreras y perfiles.
+   Administración ve todas las carreras; un coordinador, solo las que tiene a cargo.
+   Por carrera: nombre visible (solo administración), coordinadores a cargo (solo administración) y su
+   tabla de ponderación: 100 puntos entre las 24 competencias, con reparto automático al marcar las claves
+   (★) y ajuste manual. Antes de guardar se ve cómo cambia el CRR de sus estudiantes. */
 import { useMemo, useState } from "react";
 import { useApp } from "../data/store";
-import { Icon } from "./ui";
+import { Avatar, Icon } from "./ui";
 import { metricDesc, metricName } from "../lib/labels";
-import { normText, plural } from "../lib/metrics";
-import { COMPETENCIAS_CLAVE, PERFILES_BASE, PESO_BASE, perfilesCfg, type Perfil } from "../lib/perfiles";
+import { fmt, isRisk, mean, normText, plural, vaciasDe } from "../lib/metrics";
+import { COMPETENCIAS, PCT_CLAVES_BASE, PERFILES_BASE, aCien, codigoPerfil, crrPonderado, indiceGeneral, nuevoPerfil, perfilesActuales, repartir, repartirIgual, totalPesos, type Perfil } from "../lib/perfiles";
+import type { PerfilCarrera, Profile } from "../lib/types";
+
+const aFila = (codigo: string, p: Perfil): PerfilCarrera =>
+  ({ codigo, nombre: p.nombre, claves: p.claves, pesos: p.pesos, modo: p.modo, pct_claves: p.pctClaves });
 
 export function PerfilesEditor() {
-  const { snap, refresh, toast, api } = useApp();
-  const inicialPerfiles = () => { const c = perfilesCfg(); return { peso: c.peso, perfiles: JSON.parse(JSON.stringify(c.perfiles)) as Record<string, Perfil> }; };
-  const inicialNombres = () => Object.fromEntries(snap.carreras.map((c) => [c.codigo, c.nombre]));
-  const [f, setF] = useState(inicialPerfiles);
-  const [nombres, setNombres] = useState<Record<string, string>>(inicialNombres);
+  const { snap, user, api, refresh, toast } = useApp();
+  const esAdmin = user!.rol === "admin";
+  const yo = snap.profiles.find((p) => p.id === user!.id);
+  const misCarreras = new Set((yo?.carreras ?? []).map((c) => normText(c)));
+  const perfiles = perfilesActuales();
+  const coordinadores = snap.profiles.filter((p) => p.rol === "decano" && p.activo);
   const [abierto, setAbierto] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [nombres, setNombres] = useState<Record<string, string>>(() => Object.fromEntries(snap.carreras.map((c) => [c.codigo, c.nombre])));
 
-  // carreras con estudiantes (y las del catálogo), con cuántos estudiantes tiene cada una
+  // carreras con estudiantes, del catálogo y con perfil; el coordinador solo ve las suyas
   const filas = useMemo(() => {
     const n = new Map<string, number>();
     snap.resultados.forEach((r) => { if (r.carrera) n.set(r.carrera, (n.get(r.carrera) ?? 0) + 1); });
     snap.carreras.forEach((c) => { if (!n.has(c.codigo)) n.set(c.codigo, 0); });
-    return [...n].map(([codigo, total]) => ({ codigo, total })).sort((a, b) => a.codigo.localeCompare(b.codigo, "es"));
-  }, [snap.resultados, snap.carreras]);
+    Object.keys(perfiles).forEach((k) => { if (![...n.keys()].some((c) => normText(c) === k)) n.set(k, 0); });
+    return [...n].map(([codigo, total]) => ({ codigo, total, k: codigoPerfil(codigo, nombres[codigo]) }))
+      .filter((x) => esAdmin || misCarreras.has(normText(x.codigo)) || (x.k && misCarreras.has(x.k)))
+      .sort((a, b) => (b.total > 0 ? 1 : 0) - (a.total > 0 ? 1 : 0) || a.codigo.localeCompare(b.codigo, "es"));
+  }, [snap.resultados, snap.carreras, perfiles, nombres, esAdmin, misCarreras]);
 
-  /** Perfil que usa una carrera con los perfiles que se están editando */
-  const perfilDe = (codigo: string): { k: string; propio: boolean } | null => {
-    const c = normText(codigo), base = c.replace(/[RS]$/, "");
-    if (f.perfiles[c]) return { k: c, propio: true };
-    if (base !== c && f.perfiles[base]) return { k: base, propio: false };
-    const nom = normText(nombres[codigo] ?? codigo);
-    const porNombre = Object.entries(f.perfiles).find(([, p]) => normText(p.nombre) === nom || normText(p.nombre) === c);
-    return porNombre ? { k: porNombre[0], propio: false } : null;
-  };
-  const nombreVisible = (codigo: string) => nombres[codigo] || f.perfiles[normText(codigo)]?.nombre || "";
-
-  const setPerfil = (k: string, p: Partial<Perfil>) => setF({ ...f, perfiles: { ...f.perfiles, [k]: { ...f.perfiles[k], ...p } } });
-  const toggle = (k: string, comp: string) => {
-    const cl = f.perfiles[k].claves;
-    if (cl.some((x) => normText(x) === normText(comp))) setPerfil(k, { claves: cl.filter((x) => normText(x) !== normText(comp)) });
-    else if (cl.length < 5) setPerfil(k, { claves: [...cl, comp] });
-  };
-  const crear = (codigo: string, copiaDe?: string) => {
-    const k = normText(codigo).replace(/\s+/g, "");
-    setF({ ...f, perfiles: { ...f.perfiles, [k]: { nombre: nombreVisible(codigo) || codigo, claves: copiaDe ? [...f.perfiles[copiaDe].claves] : [] } } });
-    setAbierto(codigo);
-  };
-  const quitar = (k: string) => { const p = { ...f.perfiles }; delete p[k]; setF({ ...f, perfiles: p }); };
-
-  const cambiosNombres = filas.filter((x) => (nombres[x.codigo] ?? "") !== (snap.carreras.find((c) => c.codigo === x.codigo)?.nombre ?? ""));
-  const dirty = cambiosNombres.length > 0 || JSON.stringify(f) !== JSON.stringify(perfilesCfg());
-  const sinPerfil = filas.filter((x) => x.total > 0 && !perfilDe(x.codigo));
-  const huerfanos = Object.keys(f.perfiles).filter((k) => !filas.some((x) => normText(x.codigo) === k || normText(x.codigo).replace(/[RS]$/, "") === k));
-
-  const guardar = async () => {
-    setBusy(true);
-    try {
-      // el nombre del perfil sigue al de la carrera
-      const perfiles = Object.fromEntries(Object.entries(f.perfiles).map(([k, p]) => {
-        const fila = filas.find((x) => normText(x.codigo) === k);
-        return [k, { ...p, nombre: (fila && nombres[fila.codigo]?.trim()) || p.nombre }];
-      }));
-      if (cambiosNombres.length) await api.upsertCarreras(cambiosNombres.map((x) => ({ codigo: x.codigo, nombre: (nombres[x.codigo] ?? "").trim() })));
-      if (JSON.stringify({ ...f, perfiles }) !== JSON.stringify(perfilesCfg())) await api.setAjuste("perfiles", { ...f, perfiles });
-      await refresh();
-      toast("Carreras y perfiles guardados");
-    } catch (e) { toast((e as Error).message, "error"); }
-    setBusy(false);
+  const cambiosNombres = snap.carreras.length || Object.keys(nombres).length
+    ? filas.filter((x) => (nombres[x.codigo] ?? "") !== (snap.carreras.find((c) => c.codigo === x.codigo)?.nombre ?? "")) : [];
+  const sinPerfil = filas.filter((x) => x.total > 0 && !x.k);
+  const aCargo = (codigo: string) => coordinadores.filter((p) => (p.carreras ?? []).some((c) => normText(c) === normText(codigo)));
+  const toggleCoord = async (p: Profile, codigo: string) => {
+    const tiene = (p.carreras ?? []).some((c) => normText(c) === normText(codigo));
+    const carreras = tiene ? (p.carreras ?? []).filter((c) => normText(c) !== normText(codigo)) : [...(p.carreras ?? []), codigo];
+    try { await api.updateProfile(p.id, { carreras }); await refresh(); }
+    catch (e) { toast(/carreras/i.test((e as Error).message) ? "Falta ejecutar supabase/migrations/007_perfiles_carrera.sql en Supabase." : (e as Error).message, "error"); }
   };
 
   return (
     <section className="card pad">
-      <h3>Carreras y perfiles</h3>
-      <p className="muted small">Cada carrera tiene un <b>nombre visible</b> (se usa en toda la app) y un <b>perfil</b>: sus 5 competencias clave, que pesan más en su <b>índice de perfil</b>. El índice general (CRR) no cambia. Las carreras nuevas aparecen aquí solas al importar.</p>
-
-      <label className="peso-row">
-        <span>Peso de las 5 claves</span>
-        <input type="range" min={50} max={100} step={5} value={Math.round(f.peso * 100)} onChange={(e) => setF({ ...f, peso: Number(e.target.value) / 100 })} />
-        <b>{Math.round(f.peso * 100)} %</b>
-        <span className="muted small">{f.peso < 1 ? `el resto de competencias: ${Math.round((1 - f.peso) * 100)} %` : "solo cuentan las 5 claves"}</span>
-      </label>
-
-      {sinPerfil.length > 0 && <p className="note small">{plural(sinPerfil.length, "carrera no tiene", "carreras no tienen")} perfil: {sinPerfil.map((x) => x.codigo).join(", ")}. Sus estudiantes solo tienen el CRR.</p>}
+      <div className="card-h"><h3>Carreras y perfiles</h3>
+        {esAdmin && cambiosNombres.length > 0 && <button className="btn primary sm" onClick={async () => {
+          try { await api.upsertCarreras(cambiosNombres.map((x) => ({ codigo: x.codigo, nombre: (nombres[x.codigo] ?? "").trim() }))); await refresh(); toast("Nombres guardados"); }
+          catch (e) { toast((e as Error).message, "error"); } }}>Guardar nombres</button>}</div>
+      <p className="muted small">Cada carrera reparte <b>100 puntos</b> entre las 24 competencias: así se calcula el <b>CRR</b> de sus estudiantes. Marca con ★ las que más importan y el reparto se hace solo; luego puedes ajustar cada valor. Las de riesgo (↓) cuentan al revés: menos es mejor.
+        {!esAdmin && " Solo ves las carreras que administración te asignó."}</p>
+      {snap.perfilesListos === false && <p className="note small">Para guardar perfiles y asignar coordinadores falta ejecutar <code>supabase/migrations/007_perfiles_carrera.sql</code> en Supabase. Mientras tanto se usan los perfiles de partida.</p>}
+      {!esAdmin && !filas.length && <p className="note small">Administración aún no te asignó carreras. Cuando lo haga, aquí podrás ajustar su ponderación.</p>}
+      {esAdmin && sinPerfil.length > 0 && <p className="note small">{plural(sinPerfil.length, "carrera no tiene", "carreras no tienen")} perfil: {sinPerfil.map((x) => x.codigo).join(", ")}. Sus estudiantes usan el índice general.</p>}
 
       <div className="perfiles">
-        {filas.map(({ codigo, total }) => {
-          const pf = perfilDe(codigo);
-          const p = pf ? f.perfiles[pf.k] : null;
+        {filas.map(({ codigo, total, k }) => {
+          const p = k ? perfiles[k] : null;
+          const propio = k === normText(codigo);
           const open = abierto === codigo;
+          const resp = aCargo(codigo);
+          const puede = esAdmin || (k ? misCarreras.has(k) : misCarreras.has(normText(codigo)));
           return (
-            <div className={"perfil" + (open ? " open" : "") + (!pf && total ? " sin" : "")} key={codigo}>
+            <div className={"perfil" + (open ? " open" : "") + (!p && total ? " sin" : "")} key={codigo}>
               <div className="perfil-h">
                 <b className="perfil-cod">{codigo.length > 8 ? codigo.slice(0, 8) + "…" : codigo}</b>
-                <input className="perfil-nom" value={nombres[codigo] ?? ""} placeholder={f.perfiles[normText(codigo)]?.nombre || "Nombre de la carrera"}
-                  onChange={(e) => setNombres({ ...nombres, [codigo]: e.target.value })} aria-label={`Nombre de ${codigo}`} />
-                <span className="muted small perfil-n">{plural(total, "estudiante", "estudiantes")}</span>
-                <button type="button" className="perfil-claves" onClick={() => setAbierto(open ? null : codigo)} aria-expanded={open} title="Ver o cambiar su perfil">
-                  {p ? <>{!pf!.propio && <span className="pf">usa {pf!.k}</span>}{p.claves.map((c) => <span key={c} className="clave">{metricName(c)}</span>)}
-                    {p.claves.length < 5 && <span className="pf warn">{5 - p.claves.length} por elegir</span>}</>
-                    : <span className="pf warn">Sin perfil · crear</span>}
+                {esAdmin ? <input className="perfil-nom" value={nombres[codigo] ?? ""} placeholder={p?.nombre || "Nombre de la carrera"} onChange={(e) => setNombres({ ...nombres, [codigo]: e.target.value })} aria-label={`Nombre de ${codigo}`} />
+                  : <span className="perfil-nom-ro">{nombres[codigo] || p?.nombre || codigo}</span>}
+                <span className="muted small perfil-n">{total ? plural(total, "estudiante", "estudiantes") : "sin estudiantes"}</span>
+                <button type="button" className="perfil-claves" onClick={() => setAbierto(open ? null : codigo)} aria-expanded={open} title="Ver o cambiar su ponderación">
+                  {p ? <>{!propio && <span className="pf">usa {k}</span>}{p.claves.map((c) => <span key={c} className="clave">★ {metricName(c)}</span>)}
+                    {p.modo === "manual" && <span className="pf">manual</span>}</>
+                    : <span className="pf warn">Sin perfil{puede ? " · crear" : ""}</span>}
                   <Icon name="chevron" size={14} />
                 </button>
               </div>
               {open && (
                 <div className="perfil-body">
-                  {!pf && <div className="row-gap wrap"><span className="small">Esta carrera no tiene perfil.</span>
-                    <button type="button" className="btn primary sm" onClick={() => crear(codigo)}>Crear perfil</button></div>}
-                  {pf && !pf.propio && <div className="row-gap wrap"><span className="small">Usa el perfil de <b>{pf.k}</b> ({f.perfiles[pf.k].nombre}). Si lo cambias aquí, cambia para todas las que lo usan.</span>
-                    <button type="button" className="btn ghost sm" onClick={() => crear(codigo, pf.k)}>Darle un perfil propio</button></div>}
-                  {pf && <>
-                    <p className="muted small">Competencias clave ({p!.claves.length}/5):</p>
-                    <div className="comp-pick">
-                      {COMPETENCIAS_CLAVE.map((c) => {
-                        const on = p!.claves.some((x) => normText(x) === normText(c));
-                        return <button type="button" key={c} className={"cpick" + (on ? " on" : "")} disabled={!on && p!.claves.length >= 5} title={metricDesc(c)} onClick={() => toggle(pf.k, c)}>{on && <Icon name="check" size={12} />}{metricName(c)}</button>;
-                      })}
+                  {esAdmin && (
+                    <div className="resp">
+                      <span className="muted small">Coordinadores a cargo (pueden editar esta ponderación):</span>
+                      {coordinadores.map((c) => { const on = resp.includes(c); return (
+                        <button type="button" key={c.id} className={"pchip" + (on ? " on" : "")} onClick={() => toggleCoord(c, codigo)}><Avatar name={c.nombre} size={18} /><span>{c.nombre}</span>{on && <Icon name="check" size={12} />}</button>); })}
+                      {!coordinadores.length && <span className="muted small">No hay coordinadores todavía.</span>}
                     </div>
-                    {pf.propio && <button type="button" className="link small danger" onClick={() => quitar(pf.k)}><Icon name="trash" size={13} /> Quitar perfil</button>}
-                  </>}
+                  )}
+                  {!esAdmin && resp.length > 0 && <p className="muted small">A cargo: {resp.map((c) => c.nombre).join(", ")}</p>}
+                  {p && !propio && (
+                    <p className="small">Usa el perfil de <b>{k}</b> ({p.nombre}). {puede && <button type="button" className="link small" onClick={() => setAbierto(codigo + "§nuevo")}>Darle uno propio</button>}</p>
+                  )}
+                  {!p && puede
+                    ? <EditorPesos codigo={normText(codigo)} inicial={nuevoPerfil(nombres[codigo] || codigo, [], PCT_CLAVES_BASE)} nuevo puede={puede} onListo={() => setAbierto(null)} />
+                    : p && <EditorPesos codigo={k!} inicial={p} puede={puede && (propio || esAdmin || misCarreras.has(k!))} onListo={() => setAbierto(null)} />}
+                  {!p && !puede && <p className="muted small">Sin perfil: sus estudiantes usan el índice general.</p>}
                 </div>
+              )}
+              {abierto === codigo + "§nuevo" && (
+                <div className="perfil-body"><EditorPesos codigo={normText(codigo)} inicial={nuevoPerfil(nombres[codigo] || codigo, p?.claves ?? [], p?.pctClaves ?? PCT_CLAVES_BASE)} nuevo puede={puede} onListo={() => setAbierto(null)} /></div>
               )}
             </div>
           );
         })}
       </div>
-      {huerfanos.length > 0 && <p className="muted small">Perfiles listos para carreras que aún no tienen estudiantes: {huerfanos.join(", ")}.</p>}
-
-      <div className="row-gap wrap" style={{ marginTop: 10 }}>
-        {dirty && <button className="btn primary" disabled={busy} onClick={guardar}>{busy ? <span className="spinner" /> : "Guardar cambios"}</button>}
-        {dirty && <button className="btn ghost" onClick={() => { setF(inicialPerfiles()); setNombres(inicialNombres()); }}>Descartar</button>}
-        <button className="btn ghost sm" onClick={() => { if (confirm("¿Volver a la propuesta inicial de perfiles? Los nombres de las carreras no cambian.")) setF({ peso: PESO_BASE, perfiles: JSON.parse(JSON.stringify(PERFILES_BASE)) }); }}>Restaurar perfiles iniciales</button>
-      </div>
-      {api.mode === "cloud" && <p className="muted tiny">El nombre de cada carrera se guarda en el catálogo de carreras; los estudiantes conservan su código, así que el cambio se ve en toda la app.</p>}
+      {esAdmin && snap.perfilesListos !== false && !snap.perfiles.length && (
+        <p className="muted tiny">Aún no se ha guardado ningún perfil: se usan los de partida ({Object.keys(PERFILES_BASE).join(", ")}). Al guardar uno, queda registrado quién lo cambió y cuándo.</p>
+      )}
     </section>
+  );
+}
+
+/* ---------- Tabla de ponderación de una carrera ---------- */
+function EditorPesos({ codigo, inicial, nuevo, puede, onListo }: { codigo: string; inicial: Perfil; nuevo?: boolean; puede: boolean; onListo(): void }) {
+  const { snap, rowsByClase, api, refresh, toast, person } = useApp();
+  const [p, setP] = useState<Perfil>(() => JSON.parse(JSON.stringify(inicial)));
+  const [busy, setBusy] = useState(false);
+  const total = totalPesos(p.pesos);
+  const ok = Math.abs(total - 100) < 0.05;
+  const cambiado = nuevo || JSON.stringify(p) !== JSON.stringify(inicial);
+  const k = (m: string) => normText(m);
+  const esClave = (m: string) => p.claves.some((c) => k(c) === k(m));
+
+  const toggle = (m: string) => {
+    const claves = esClave(m) ? p.claves.filter((c) => k(c) !== k(m)) : [...p.claves, m];
+    setP({ ...p, claves, pesos: p.modo === "auto" ? repartir(claves, p.pctClaves) : p.pesos });
+  };
+  const setPct = (v: number) => setP({ ...p, pctClaves: v, modo: "auto", pesos: repartir(p.claves, v) });
+  const setPeso = (m: string, v: number) => setP({ ...p, modo: "manual", pesos: { ...p.pesos, [k(m)]: Math.max(0, Math.min(100, Math.round(v * 10) / 10)) } });
+
+  // vista previa: CRR medio de los estudiantes de esta carrera antes y después de los cambios
+  const impacto = useMemo(() => {
+    const filas = [...rowsByClase.values()].flat().filter((r) => codigoPerfil(r.r.carrera, r.carrera) === codigo || (nuevo && normText(r.r.carrera) === codigo));
+    if (!filas.length) return null;
+    const vac = new Map<string, Set<string>>();
+    const despues = filas.map((r) => {
+      if (!vac.has(r.cls.id)) vac.set(r.cls.id, vaciasDe(r.cls.metrics, (rowsByClase.get(r.cls.id) ?? []).map((x) => x.r.valores)));
+      return crrPonderado(r.cls.metrics, r.r.valores, p.pesos, vac.get(r.cls.id)) ?? indiceGeneral(r.cls.metrics, r.r.valores, vac.get(r.cls.id));
+    });
+    return { n: filas.length, antes: mean(filas.map((r) => r.indice)), despues: mean(despues), general: mean(filas.map((r) => r.general)) };
+  }, [rowsByClase, codigo, p.pesos, nuevo]);
+
+  const guardar = async () => {
+    setBusy(true);
+    try { await api.savePerfil({ ...aFila(codigo, p), nombre: p.nombre || codigo }); await refresh(); toast(`Ponderación de ${codigo} guardada`); onListo(); }
+    catch (e) { toast((e as Error).message, "error"); }
+    setBusy(false);
+  };
+  const quitar = async () => {
+    if (!confirm(`¿Quitar el perfil de ${codigo}? Sus estudiantes pasarán a usar el índice general.`)) return;
+    try { await api.deletePerfil(codigo); await refresh(); toast(`Perfil de ${codigo} quitado`); onListo(); } catch (e) { toast((e as Error).message, "error"); }
+  };
+
+  const fila = (m: string) => {
+    const v = p.pesos[k(m)] ?? 0;
+    return (
+      <div className={"pw-row" + (esClave(m) ? " pw-key" : "")} key={m}>
+        <button type="button" className={"pw-star" + (esClave(m) ? " on" : "")} disabled={!puede} onClick={() => toggle(m)} aria-label={esClave(m) ? "Quitar de las claves" : "Marcar como clave"} title={esClave(m) ? "Clave: recibe más peso" : "Marcar como clave"}>★</button>
+        <span className={"pw-n" + (isRisk(m) ? " risk" : "")} title={metricDesc(m)}>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span>
+        <span className="pw-bar"><i style={{ width: Math.min(100, v * 4) + "%" }} /></span>
+        <input type="number" min={0} max={100} step={0.5} value={v} disabled={!puede} onChange={(e) => setPeso(m, Number(e.target.value))} aria-label={`Puntos de ${metricName(m)}`} />
+      </div>
+    );
+  };
+
+  return (
+    <div className="pw">
+      <div className="pw-top">
+        <div className={"pw-total" + (ok ? " ok" : " bad")}><b>{fmt(total)}</b><small>de 100 puntos</small></div>
+        <label className="pw-pct">
+          <span>Las ★ claves reciben</span>
+          <input type="range" min={10} max={80} step={5} value={p.pctClaves} disabled={!puede || !p.claves.length} onChange={(e) => setPct(Number(e.target.value))} />
+          <b>{p.pctClaves} %</b>
+        </label>
+        <span className={"pf" + (p.modo === "manual" ? " warn" : "")}>{p.modo === "auto" ? "Reparto automático" : "Ajustado a mano"}</span>
+      </div>
+      {puede && (
+        <div className="row-gap wrap pw-acts">
+          <button type="button" className="btn ghost sm" onClick={() => setP({ ...p, modo: "auto", pesos: repartir(p.claves, p.pctClaves) })}>Repartir automáticamente</button>
+          <button type="button" className="btn ghost sm" onClick={() => setP({ ...p, modo: "manual", pesos: repartirIgual() })}>Partes iguales</button>
+          {!ok && <button type="button" className="btn ghost sm" onClick={() => setP({ ...p, modo: "manual", pesos: aCien(p.pesos) })}>Ajustar a 100</button>}
+          <span className="muted small">{p.claves.length ? `${p.claves.length} claves · ${fmt((p.pctClaves) / Math.max(1, p.claves.length))} pts cada una` : "Marca con ★ las competencias clave"}</span>
+        </div>
+      )}
+      <div className="pw-grid">
+        <div><h5 className="sub-h">Competencias</h5>{COMPETENCIAS.filter((m) => !isRisk(m)).map(fila)}</div>
+        <div><h5 className="sub-h">De riesgo (↓, cuentan invertidas)</h5>{COMPETENCIAS.filter(isRisk).map(fila)}</div>
+      </div>
+      {impacto && (
+        <p className="pw-impacto small">CRR promedio de sus {plural(impacto.n, "estudiante", "estudiantes")}: <b>{fmt(impacto.antes)}</b>{cambiado && <> → <b className={impacto.despues! >= impacto.antes! ? "pos" : "neg"}>{fmt(impacto.despues)}</b></>}
+          <span className="muted"> · índice general sin ponderar {fmt(impacto.general)}</span></p>
+      )}
+      {inicial.actualizadoEn && !nuevo && <p className="muted tiny">Última modificación: {person(inicial.actualizadoPor)?.nombre ?? "—"} · {new Date(inicial.actualizadoEn).toLocaleString("es")}</p>}
+      {puede && (
+        <div className="row-gap wrap">
+          <button className="btn primary sm" disabled={!ok || busy || !cambiado} onClick={guardar}>{busy ? <span className="spinner" /> : nuevo ? "Crear perfil" : "Guardar ponderación"}</button>
+          {!ok && <span className="neg small">El total debe ser 100.</span>}
+          {!nuevo && snap.perfiles.some((x) => normText(x.codigo) === codigo) && <button type="button" className="link small danger" onClick={quitar}><Icon name="trash" size={13} /> Quitar perfil</button>}
+          <button type="button" className="btn ghost sm" onClick={onListo}>Cerrar</button>
+        </div>
+      )}
+    </div>
   );
 }

@@ -3,8 +3,8 @@ import type { Api } from "./api";
 import { createApi, friendlyError } from "./api";
 import type { Clase, Desempeno, DesempenoEquipo, Profile, Snapshot } from "../lib/types";
 import { linkJugadores, ultimoT } from "../lib/game";
-import { perfilDe, perfilIndex, setPerfiles } from "../lib/perfiles";
-import { SIN_CARRERA, SIN_GRUPO, generalIndex, normText, unionMetrics, vaciasDe, type Row } from "../lib/metrics";
+import { crrDe, setPerfiles } from "../lib/perfiles";
+import { SIN_CARRERA, SIN_GRUPO, normText, unionMetrics, vaciasDe, type Row } from "../lib/metrics";
 import { setCargos, setMetricNames, setRoleNames, type RoleNames } from "../lib/labels";
 
 /** Jugador que queda fuera de los gráficos: no completó la simulación o no está en el informe de competencias */
@@ -40,7 +40,7 @@ interface Ctx {
 const AppCtx = createContext<Ctx | null>(null);
 export const useApp = () => { const c = useContext(AppCtx); if (!c) throw new Error("sin AppProvider"); return c; };
 
-const EMPTY: Snapshot = { profiles: [], clases: [], resultados: [], carreras: [], ajustes: {}, desempeno: [], desempenoEquipos: [] };
+const EMPTY: Snapshot = { profiles: [], clases: [], resultados: [], carreras: [], ajustes: {}, desempeno: [], desempenoEquipos: [], perfiles: [] };
 export interface ToastItem { id: number; msg: string; kind: "ok" | "error"; }
 
 export function AppProvider({ children, onToasts }: { children: ReactNode; onToasts: (t: ToastItem[]) => void }) {
@@ -96,7 +96,7 @@ export function AppProvider({ children, onToasts }: { children: ReactNode; onToa
     setRoleNames(snap.ajustes.roles as Partial<RoleNames> | undefined);
     setCargos(snap.ajustes.cargos);
     setMetricNames(snap.ajustes.competencias);
-    setPerfiles(snap.ajustes.perfiles);
+    setPerfiles(snap.perfiles, snap.ajustes.perfiles);
     const carreraMap = new Map(snap.carreras.map((c) => [c.codigo, c.nombre]));
     const carreraName = (code: string) => (code ? carreraMap.get(code) || code : SIN_CARRERA);
     const clsMap = new Map(snap.clases.map((c) => [c.id, c]));
@@ -108,9 +108,8 @@ export function AppProvider({ children, onToasts }: { children: ReactNode; onToa
     const vacias = new Map(snap.clases.map((c) => [c.id, vaciasDe(c.metrics, valsPorClase.get(c.id) ?? [])]));
     for (const r of snap.resultados) {
       const cls = clsMap.get(r.clase_id); if (!cls) continue;
-      const pf = perfilDe(r.carrera, carreraName(r.carrera));
-      const row: Row = { r, cls, indice: generalIndex(cls.metrics, r.valores, vacias.get(cls.id)), carrera: carreraName(r.carrera),
-        perfil: pf ? perfilIndex(cls.metrics, r.valores, pf.perfil.claves, vacias.get(cls.id)) : null, perfilCodigo: pf?.codigo ?? null,
+      const ix = crrDe(cls.metrics, r.valores, r.carrera, carreraName(r.carrera), vacias.get(cls.id));
+      const row: Row = { r, cls, indice: ix.crr, general: ix.general, perfilCodigo: ix.codigo, carrera: carreraName(r.carrera),
         grupo: r.grupo || cls.grupo || SIN_GRUPO, equipo: r.equipo || "",
         q: normText(r.nombre + " " + r.matricula + " " + r.grupo + " " + (r.equipo ?? "") + " " + cls.nombre) };
       rows.push(row);

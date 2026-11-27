@@ -12,6 +12,7 @@ import { D, low, M, metricDesc, metricName } from "../lib/labels";
 import { downloadClase } from "../lib/templates";
 import { GridEditor, ReuploadButton } from "../components/ClassEditor";
 import { GamePanel, IncompleteList, esIndividual } from "../components/GameCharts";
+import { ResaltarPerfil, perfilElegido, perfilPredominante } from "../components/ResaltarPerfil";
 import { fmtMin } from "../lib/game";
 import { PALETTE } from "../data/demoSeed";
 import type { Clase, Profile } from "../lib/types";
@@ -23,6 +24,8 @@ export default function ClaseDetalle() {
   const go = useNavigate();
   const [invert, setInvert] = usePref("radarInvert", true);
   const [vs, setVs] = useState<"general" | "carreras" | "equipos">("general");
+  // perfil a resaltar en el radar: por defecto, el de la carrera que predomina en la clase
+  const [resaltar, setResaltar] = useState<string | null | undefined>(undefined);
   const [sort, setSort] = useState<{ k: "nombre" | "indice" | "carrera" | "perfil"; dir: 1 | -1 }>({ k: "indice", dir: -1 });
   const [edit, setEdit] = useState(false);
   const [grid, setGrid] = useState(false);
@@ -44,9 +47,10 @@ export default function ClaseDetalle() {
 
   const sorted = [...d.rr].sort((a, b) => {
     const k = sort.k;
-    const v = k === "nombre" ? displayName(a.r.nombre).localeCompare(displayName(b.r.nombre), "es") : k === "carrera" ? a.carrera.localeCompare(b.carrera, "es") : k === "perfil" ? (a.perfil ?? -1) - (b.perfil ?? -1) : (a.indice ?? -1) - (b.indice ?? -1);
+    const v = k === "nombre" ? displayName(a.r.nombre).localeCompare(displayName(b.r.nombre), "es") : k === "carrera" ? a.carrera.localeCompare(b.carrera, "es") : k === "perfil" ? (a.general ?? -1) - (b.general ?? -1) : (a.indice ?? -1) - (b.indice ?? -1);
     return v * sort.dir;
   });
+  const resaltarK = resaltar === undefined ? perfilPredominante(d.rr) : resaltar;
   const pick = (v: (number | null)[]) => d.labels.map((m) => v[c.metrics.indexOf(m)]) as number[];
   const series: Series[] = vs === "general"
     ? [{ name: c.nombre, color: c.color, values: pick(d.vec) }, ...(snap.clases.length > 1 ? [{ name: "Todas mis clases", color: "var(--text-3)", values: pick(d.all), dash: true, muted: true }] : [])]
@@ -115,7 +119,8 @@ export default function ClaseDetalle() {
             <h3>Perfil de la clase</h3>
             <Segmented size="sm" value={vs} onChange={setVs} options={[{ value: "general", label: "vs promedio" }, { value: "carreras", label: "por carrera" }, ...(d.equipos.length > 1 ? [{ value: "equipos" as const, label: "por equipo" }] : [])]} />
           </div>
-          <Radar labels={d.labels} series={series} invert={invert} onInvert={setInvert} size={600} />
+          <ResaltarPerfil value={resaltarK} onChange={setResaltar} rows={d.rr} />
+          <Radar labels={d.labels} series={series} invert={invert} onInvert={setInvert} size={600} destacar={perfilElegido(resaltarK)?.claves} pesos={perfilElegido(resaltarK)?.pesos} />
         </section>
         <section className="card pad">
           <h3>Competencias</h3>
@@ -152,7 +157,7 @@ export default function ClaseDetalle() {
             ? <button className="btn sm" onClick={() => setGrid(true)}><Icon name="edit" size={14} /> Editar en tabla</button>
             : <span className="muted small">Toca a un estudiante para ver su perfil</span>}</div>
         {grid ? <GridEditor cls={c} rows={d.rr} onDone={() => setGrid(false)} /> : <div className="stable">
-          <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "CRR")}<span className="st-pf-h" title="Índice de perfil de su carrera: da más peso a sus 5 competencias clave">{th("perfil", "Perfil")}</span><span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
+          <div className="st-row st-h">{th("nombre", "Nombre")}{th("carrera", "Carrera")}{th("indice", "CRR")}<span className="st-pf-h" title="Índice general sin ponderar: promedio simple de las competencias positivas. Sirve para comparar entre carreras.">{th("perfil", "General")}</span><span className="hide-sm">Más fuerte</span><span className="hide-sm">A reforzar</span></div>
           {sorted.map((r) => <StudentRow key={r.r.id} r={r} onOpen={() => openStudent(r.r.id, sorted.map((x) => x.r.id))} />)}
         </div>}
       </section>
@@ -174,7 +179,7 @@ function StudentRow({ r, onOpen }: { r: Row; onOpen(): void }) {
       <span className="st-name"><Avatar name={r.r.nombre} size={28} color={r.cls.color} />{displayName(r.r.nombre)}</span>
       <span className="muted">{r.carrera}</span>
       <span className="st-idx"><b>{fmt(r.indice)}</b><LevelChip v={r.indice} /></span>
-      <span className="st-pf" title={r.perfilCodigo ? `Perfil ${r.perfilCodigo}` : "Su carrera no tiene perfil configurado"}>{r.perfil !== null ? <><b>{fmt(r.perfil)}</b><small>{r.perfilCodigo}</small></> : <span className="muted">—</span>}</span>
+      <span className="st-pf" title={r.perfilCodigo ? `CRR ponderado con el perfil ${r.perfilCodigo}; aquí, el índice general sin ponderar` : "Su carrera no tiene perfil: el CRR es el índice general"}><b>{fmt(r.general)}</b>{r.perfilCodigo && <small>{r.perfilCodigo}</small>}</span>
       <span className="hide-sm small">{vals[0] && metricName(vals[0].m)}</span>
       <span className="hide-sm small muted">{vals.length > 0 && metricName(vals[vals.length - 1].m)}</span>
     </button>

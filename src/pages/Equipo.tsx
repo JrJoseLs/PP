@@ -220,22 +220,27 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
   const { user, snap, run, api } = useApp();
   const isAdmin = user!.rol === "admin";
   const [f, setF] = useState({ nombre: p?.nombre ?? "", usuario: p?.usuario ?? "", password: p ? "" : genPass(),
-    rol: (p?.rol ?? "maestro") as Rol, cargo: p ? cargoDe(p) : (cargosList().find((c) => c.rol === "maestro")?.label ?? M().one), decano_id: p ? p.decano_id : isAdmin ? decanoFor : user!.id, activo: p?.activo ?? true });
+    rol: (p?.rol ?? "maestro") as Rol, cargo: p ? cargoDe(p) : (cargosList().find((c) => c.rol === "maestro")?.label ?? M().one), carreras: p?.carreras ?? [] as string[], decano_id: p ? p.decano_id : isAdmin ? decanoFor : user!.id, activo: p?.activo ?? true });
   const [touchedUser, setTouchedUser] = useState(!!p);
   const [created, setCreated] = useState<{ usuario: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const decanos = snap.profiles.filter((x) => x.rol === "decano");
   const self = p?.id === user!.id;
+  // códigos de carrera conocidos (de los estudiantes y del catálogo), sin las variantes R/S que usan el perfil de su base
+  const codigosCarrera = [...new Set([...snap.resultados.map((r) => r.carrera), ...snap.carreras.map((c) => c.codigo)].filter(Boolean).map((c) => c.toUpperCase()))].sort();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);
     if (!p) {
       const res = await run((a) => a.createUser({ nombre: f.nombre, usuario: f.usuario, password: f.password, rol: f.rol, cargo: f.cargo, decano_id: f.rol === "maestro" ? f.decano_id : null }), "Cuenta creada");
+      // carreras a cargo del coordinador recién creado
+      if (res && typeof res === "object" && f.rol === "decano" && f.carreras.length) await run((a) => a.updateProfile((res as Profile).id, { carreras: f.carreras }));
       if (res) setCreated({ usuario: f.usuario, password: f.password });
     } else {
       const patch: Partial<Profile> = { nombre: f.nombre, activo: f.activo };
       if (isAdmin) { patch.rol = f.rol; patch.decano_id = f.rol === "maestro" ? f.decano_id : null; }
       if (!self && f.cargo !== cargoDe(p)) patch.cargo = f.cargo;
+      if (isAdmin && f.rol === "decano" && JSON.stringify(f.carreras) !== JSON.stringify(p.carreras ?? [])) patch.carreras = f.carreras;
       const ok = await run((a) => a.updateProfile(p.id, patch), "Cambios guardados");
       if (ok !== false && f.password) await run((a) => a.setPassword(p.id, f.password), "Contraseña actualizada");
       onClose();
@@ -270,6 +275,11 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
               {!cargosList().some((c) => c.label === f.cargo) && <option value={f.cargo}>{f.cargo}</option>}
             </select>
             <small className="muted">{NIVELES[f.rol].titulo}: {NIVELES[f.rol].nota.toLowerCase()}. Los cargos se definen en Ajustes.</small></label>
+        )}
+        {isAdmin && f.rol === "decano" && codigosCarrera.length > 0 && (
+          <div className="field"><span>Carreras a cargo <small className="muted">(puede ajustar su ponderación)</small></span>
+            <div className="chips">{codigosCarrera.map((c) => { const on = f.carreras.includes(c); return (
+              <button type="button" key={c} className={"pchip" + (on ? " on" : "")} onClick={() => setF({ ...f, carreras: on ? f.carreras.filter((x) => x !== c) : [...f.carreras, c] })}>{c}{on && <Icon name="check" size={12} />}</button>); })}</div></div>
         )}
         {isAdmin && f.rol === "maestro" && (
           <label className="field"><span>{D().one} a cargo</span>

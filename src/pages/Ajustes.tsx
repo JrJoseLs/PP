@@ -47,7 +47,7 @@ export default function Ajustes() {
         </section>
 
         {user!.rol === "admin" && <CargosEditor />}
-        {user!.rol === "admin" && <PerfilesEditor />}
+        {user!.rol !== "maestro" && <PerfilesEditor />}
         {user!.rol === "admin" && <MetricNamesEditor />}
 
         {user!.rol !== "admin" && <section className="card pad">

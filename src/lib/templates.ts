@@ -67,12 +67,12 @@ export async function downloadClase(c: Clase, rows: ClaseRow[], juego?: ClaseJue
   const r1 = (v: number | null | undefined) => (typeof v === "number" ? Math.round(v * 10) / 10 : null);
   const orden = [...rows].filter((x) => x.indice !== null).sort((a, b) => b.indice! - a.indice!);
   const nivel = (v: number | null) => (v === null ? "" : v >= 66 ? "Alto" : v >= 34 ? "Medio" : "Bajo");
-  const resumen: Cell[][] = [["Estudiante", "Matrícula", "Carrera", "Grupo", "Equipo", "Índice", "Nivel", "Puesto en la clase", "Perfil", "Índice de perfil",
+  const resumen: Cell[][] = [["Estudiante", "Matrícula", "Carrera", "Grupo", "Equipo", "CRR", "Nivel", "Puesto en la clase", "Perfil de ponderación", "Índice general (sin ponderar)",
     "Scorecard acumulado", "Tiempo en el juego [min]", "Trimestres jugados", "Simulación", "Correo"],
     ...rows.map((x) => {
       const j = x.juego ?? x.juegoParcial;
       return [x.r.nombre, x.r.matricula, x.carrera, x.grupo, x.equipo, r1(x.indice), nivel(x.indice), x.indice !== null ? orden.indexOf(x) + 1 : null,
-        x.perfilCodigo ?? "", r1(x.perfil), r1(j?.bsc_acum), j?.minutos != null ? Math.round(j.minutos) : null,
+        x.perfilCodigo ?? "", r1(x.general), r1(j?.bsc_acum), j?.minutos != null ? Math.round(j.minutos) : null,
         j ? Math.max(j.trimestres ?? 0, ...(j.historial ?? []).map((p) => p.t)) || null : null,
         x.juego ? "Completa" : x.juegoParcial ? "Incompleta" : "", j?.email ?? ""] as Cell[];
     })];
@@ -103,7 +103,7 @@ export async function downloadClase(c: Clase, rows: ClaseRow[], juego?: ClaseJue
   save(X, hojas, safeName(c.nombre) + ".xlsx");
 }
 /* Tipos mínimos que necesita la descarga (evitan importar la tienda de datos desde aquí) */
-type ClaseRow = { r: Resultado; indice: number | null; perfil: number | null; perfilCodigo: string | null; carrera: string; grupo: string; equipo: string; juego?: Desempeno; juegoParcial?: Desempeno };
+type ClaseRow = { r: Resultado; indice: number | null; general: number | null; perfilCodigo: string | null; carrera: string; grupo: string; equipo: string; juego?: Desempeno; juegoParcial?: Desempeno };
 type ClaseJuego = { jugadores: Desempeno[]; equipos: unknown[]; completos: Desempeno[]; incompletos: { d: Desempeno; motivo: string }[] };
 
 /* ---------- Directorio de estudiantes ---------- */

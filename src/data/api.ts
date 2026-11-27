@@ -1,4 +1,4 @@
-import type { Carrera, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
+import type { Carrera, ClaseDraft, Desempeno, DesempenoEquipo, NewUser, PerfilCarrera, Profile, Resultado, ResultadoPatch, RosterEntry, Snapshot } from "../lib/types";
 
 export interface Api {
   mode: "demo" | "cloud";
@@ -9,7 +9,7 @@ export interface Api {
   load(): Promise<Snapshot>;
 
   createUser(u: NewUser): Promise<Profile>;
-  updateProfile(id: string, patch: Partial<Pick<Profile, "nombre" | "rol" | "decano_id" | "activo">>): Promise<void>;
+  updateProfile(id: string, patch: Partial<Pick<Profile, "nombre" | "rol" | "decano_id" | "activo" | "cargo" | "carreras">>): Promise<void>;
   setPassword(id: string, password: string): Promise<void>;
   changeMyPassword(password: string): Promise<void>;
   deleteUser(id: string): Promise<void>;
@@ -28,6 +28,9 @@ export interface Api {
   /** Guarda en bloque los estudiantes de una clase: crea o modifica (upserts) y quita (deletes) */
   saveResultados(claseId: string, upserts: Resultado[], deletes: string[]): Promise<void>;
   upsertCarreras(list: Carrera[]): Promise<void>;
+  /** Guarda el perfil de ponderación de una carrera (administración o el coordinador que la tiene a cargo) */
+  savePerfil(p: PerfilCarrera): Promise<void>;
+  deletePerfil(codigo: string): Promise<void>;
   /** Guarda un ajuste de la plataforma, como los nombres de roles o competencias (solo administración) */
   setAjuste(clave: string, valor: unknown): Promise<void>;
 

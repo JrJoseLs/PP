@@ -8,7 +8,8 @@ import { useApp } from "../data/store";
 import { Icon, Modal } from "./ui";
 import { Directory } from "../lib/directory";
 import { readSheet, parseReport } from "../lib/parse";
-import { displayName, fmt, generalIndex, isRisk, normText, plural, vaciasDe, type Row } from "../lib/metrics";
+import { displayName, fmt, isRisk, normText, plural, vaciasDe, type Row } from "../lib/metrics";
+import { crrDe } from "../lib/perfiles";
 import { metricDesc, metricName } from "../lib/labels";
 import { friendlyError } from "../data/api";
 import type { Clase, Resultado } from "../lib/types";
@@ -32,7 +33,8 @@ export function EditStudentModal({ row, onClose }: { row: Row; onClose(): void }
   const [vals, setVals] = useState<string[]>(row.r.valores.map((v) => String(v ?? 0)));
   const [busy, setBusy] = useState(false);
   const valores = vals.map(num);
-  const idx = generalIndex(c.metrics, valores, vacias);
+  // mismo CRR que en el resto de la app: ponderado con el perfil de su carrera
+  const idx = crrDe(c.metrics, valores, f.carrera, row.carrera, vacias).crr;
   const changed = c.metrics.filter((_, i) => Math.abs(valores[i] - (row.r.valores[i] ?? 0)) > 0.004).length;
 
   const save = async () => {
@@ -145,7 +147,7 @@ export function GridEditor({ cls, rows, onDone }: { cls: Clase; rows: Row[]; onD
             {list.map((r, ri) => {
               const o = orig.get(r.id);
               const cell = (k: Campo) => (r._new || (o && (o[k] ?? "") !== (r[k] ?? "")) ? " chg" : "");
-              const idx = generalIndex(cls.metrics, r.valores, vaciasCls);
+              const idx = crrDe(cls.metrics, r.valores, r.carrera, "", vaciasCls).crr;
               return (
                 <tr key={r.id} className={(r._del ? "del" : "") + (r._new ? " nuevo" : "")}>
                   <td className="sticky ge-name"><input className={"cell" + cell("nombre")} value={r.nombre} placeholder="Nombre del estudiante" data-r={ri} data-c="nombre" onKeyDown={nav} onChange={(e) => set(r.id, { nombre: e.target.value })} /></td>

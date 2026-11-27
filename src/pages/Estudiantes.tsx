@@ -32,7 +32,7 @@ export default function Estudiantes() {
   const list = useMemo(() => {
     const out = [...rows];
     const get = (r: Row): number | string => sort.k === "nombre" ? displayName(r.r.nombre) : sort.k === "clase" ? r.cls.nombre : sort.k === "carrera" ? r.carrera
-      : sort.k === "indice" ? r.indice ?? -1 : sort.k === "perfil" ? r.perfil ?? -1 : sort.k === "minutos" ? r.juego?.minutos ?? -1 : sort.k === "bsc" ? r.juego?.bsc_acum ?? -1
+      : sort.k === "indice" ? r.indice ?? -1 : sort.k === "perfil" ? r.general ?? -1 : sort.k === "minutos" ? r.juego?.minutos ?? -1 : sort.k === "bsc" ? r.juego?.bsc_acum ?? -1
       : metricValue(r, sort.k) ?? -1;
     return out.sort((a, b) => { const x = get(a), y = get(b); return (typeof x === "string" ? x.localeCompare(y as string, "es") : x - (y as number)) * sort.dir; });
   }, [rows, sort]);
@@ -45,7 +45,7 @@ export default function Estudiantes() {
   const exportXlsx = async () => {
     const XLSX = await import("xlsx");
     const data = list.map((r) => {
-      const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Equipo: r.equipo, Clase: r.cls.nombre, "Índice general": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "", "Índice de perfil": r.perfil === null ? null : Math.round(r.perfil * 10) / 10, "Perfil": r.perfilCodigo ?? "",
+      const o: Record<string, string | number | null> = { Estudiante: displayName(r.r.nombre), Matrícula: r.r.matricula, Carrera: r.carrera, Grupo: r.grupo, Equipo: r.equipo, Clase: r.cls.nombre, "CRR": r.indice === null ? null : Math.round(r.indice * 10) / 10, Nivel: levelOf(r.indice)?.label ?? "", "Índice general (sin ponderar)": r.general === null ? null : Math.round(r.general * 10) / 10, "Perfil de ponderación": r.perfilCodigo ?? "",
         "Tiempo en el juego [min]": r.juego?.minutos === null || r.juego?.minutos === undefined ? null : Math.round(r.juego.minutos),
         "Scorecard acumulado (equipo)": r.juego?.bsc_acum ?? null,
         "Simulación": r.juego ? "Completa" : r.juegoParcial ? `Incompleta (llegó a T${ultimoT(r.juegoParcial)})` : "" };
@@ -72,7 +72,7 @@ export default function Estudiantes() {
           <table className={"etable" + (mode === "mapa" ? " heat" : "")}>
             <thead><tr>
               {th("nombre", "Estudiante", "sticky")}
-              {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th><th className="hide-sm">Equipo</th>{th("indice", "Índice", "num")}<th>Nivel</th>{th("perfil", "Perfil", "num hide-sm")}
+              {mode === "resumen" ? <>{th("clase", "Clase")}{th("carrera", "Carrera")}<th className="hide-sm">Grupo</th><th className="hide-sm">Equipo</th>{th("indice", "Índice", "num")}<th>Nivel</th>{th("perfil", "General", "num hide-sm")}
                 {conJuego && <>{th("bsc", "Scorecard", "num hide-sm")}{th("minutos", "Tiempo", "num hide-sm")}</>}</>
                 : <>{th("indice", "Índice", "num")}{cols.map((m) => <th key={m} className="vert" title={metricName(m) + (metricDesc(m) ? " · " + metricDesc(m) : "")}><button className={"th" + (sort.k === m ? " on" : "")} onClick={() => setSort({ k: m, dir: sort.k === m ? (-sort.dir as 1 | -1) : -1 })}><span>{metricName(m)}{isRisk(m) ? " ↓" : ""}</span></button></th>)}</>}
             </tr></thead>
@@ -87,7 +87,7 @@ export default function Estudiantes() {
                     <td className="muted hide-sm">{r.equipo || "—"}</td>
                     <td className="num"><span className="idxbar"><i style={{ width: (r.indice ?? 0) + "%" }} /></span><b>{fmt(r.indice)}</b></td>
                     <td><LevelChip v={r.indice} /></td>
-                    <td className="num hide-sm" title={r.perfilCodigo ? `Perfil ${r.perfilCodigo}` : "Su carrera no tiene perfil configurado"}>{r.perfil !== null ? <><b>{fmt(r.perfil)}</b> <small className="muted">{r.perfilCodigo}</small></> : <span className="muted">—</span>}</td>
+                    <td className="num hide-sm" title={r.perfilCodigo ? `El CRR usa el perfil ${r.perfilCodigo}; esto es el índice general sin ponderar` : "Su carrera no tiene perfil: el CRR es el índice general"}>{fmt(r.general)}{r.perfilCodigo && <small className="muted"> {r.perfilCodigo}</small>}</td>
                     {conJuego && <>
                       <td className="num hide-sm">{fmt(r.juego?.bsc_acum ?? null)}</td>
                       <td className="num muted hide-sm">{r.juego ? fmtMin(r.juego.minutos) : r.juegoParcial ? <span className="pf warn" title="No completó la simulación: no cuenta en gráficos ni promedios">Incompleto · T{ultimoT(r.juegoParcial)}</span> : "—"}</td>
