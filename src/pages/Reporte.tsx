@@ -26,7 +26,7 @@ export default function Reporte() {
   const [inst, setInst] = useState<string>(guardado.inst ?? "");
   const [nombres, setNombres] = useState(false);
   const [secs, setSecs] = useState<Set<Seccion>>(new Set(SECCIONES.map(([k]) => k)));
-  const [verClases, setVerClases] = useState(false);
+  const [buscar, setBuscar] = useState("");
   const [editados, setEditados] = useState<Record<string, string>>({});
 
   useEffect(() => { try { localStorage.setItem(LS, JSON.stringify({ asig, inst })); } catch { /* */ } }, [asig, inst]);
@@ -35,8 +35,13 @@ export default function Reporte() {
 
   const asignaturas = useMemo(() => [...new Set(snap.clases.map((c) => asignaturaDe(c.nombre)).filter((x): x is string => !!x))].sort(), [snap.clases]);
   const periodos = useMemo(() => [...new Set(snap.clases.map((c) => c.periodo).filter(Boolean))].sort().reverse(), [snap.clases]);
-  const candidatas = snap.clases.filter((c) => (!asig || asignaturaDe(c.nombre) === asig) && (!periodo || c.periodo === periodo));
-  const clases = candidatas.filter((c) => !excluidas.has(c.id));
+  const enFiltro = (c: { nombre: string; periodo: string }, a = asig, p = periodo) => (!a || asignaturaDe(c.nombre) === a) && (!p || c.periodo === p);
+  const conDatos = (id: string) => (rowsByClase.get(id)?.length ?? 0) > 0;
+  const candidatas = snap.clases.filter((c) => enFiltro(c)).sort((a, b) => Number(conDatos(b.id)) - Number(conDatos(a.id)) || a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
+  // las clases sin informe de competencias no aportan al reporte: se muestran, pero no se incluyen
+  const clases = candidatas.filter((c) => !excluidas.has(c.id) && conDatos(c.id));
+  const seleccionables = candidatas.filter((c) => conDatos(c.id));
+  const visibles = buscar.trim() ? candidatas.filter((c) => c.nombre.toLowerCase().includes(buscar.trim().toLowerCase())) : candidatas;
 
   const juegos = useMemo(() => new Map([...juegoByClase].map(([k, j]) => [k, { completos: j.completos, jugadores: j.jugadores, equiposOk: j.equiposOk, meta: j.meta } as JuegoResumen])), [juegoByClase]);
   const rep = useMemo(() => construirReporte(clases, rowsByClase, juegos, metrics), [clases, rowsByClase, juegos, metrics]);
@@ -57,6 +62,15 @@ export default function Reporte() {
   const labels = metrics.filter((m) => !sparseMetrics(clases.flatMap((c) => rowsByClase.get(c.id) ?? []), metrics).has(m));
   const pick = (v: (number | null)[]) => labels.map((m) => v[metrics.indexOf(m)]) as number[];
   const todas = clases.flatMap((c) => rowsByClase.get(c.id) ?? []);
+  // hojas que salen (en orden) y número de cada sección, según lo elegido
+  const hojas: string[][] = [["portada"], ["resumen"]];
+  if (S("grupos")) hojas.push(["grupos"]);
+  if (S("competencias") && labels.length >= 3) hojas.push(["competencias"]);
+  const cs = [S("carreras") && rep.carreras.length > 0 && "carreras", S("simulacion") && rep.sim.conJuego > 0 && "simulacion"].filter((x): x is string => !!x);
+  if (cs.length) hojas.push(cs);
+  if (S("apoyo")) hojas.push(["apoyo"]);
+  if (S("cierre")) hojas.push(["cierre"]);
+  const num = (k: string) => hojas.slice(1).flat().indexOf(k) + 1;
   const g0 = rep.grupos[0], gN = ult(rep.grupos);
   const maxCrr = Math.max(1, ...rep.grupos.map((g) => g.crr ?? 0));
 
@@ -76,25 +90,70 @@ export default function Reporte() {
     <div className="rp-root">
       <aside className="rp-panel no-print">
         <h2><Icon name="report" size={20} /> Reporte ejecutivo</h2>
-        <p className="muted small">Se arma solo con los datos. Haz clic en cualquier texto del reporte para corregirlo antes de descargarlo.</p>
-        <label className="rp-f"><span>Asignatura</span>
-          <select value={asig} onChange={(e) => { setAsig(e.target.value); setExcluidas(new Set()); }}>
-            <option value="">Todas</option>{asignaturas.map((a) => <option key={a}>{a}</option>)}
-          </select></label>
-        {periodos.length > 0 && <label className="rp-f"><span>Período</span>
-          <select value={periodo} onChange={(e) => { setPeriodo(e.target.value); setExcluidas(new Set()); }}>
-            <option value="">Todos</option>{periodos.map((p) => <option key={p}>{p}</option>)}
-          </select></label>}
-        <div className="rp-f"><span>Clases</span>
-          <button type="button" className="btn ghost sm" onClick={() => setVerClases(!verClases)}>{clases.length} de {candidatas.length} <Icon name="chevron" size={12} /></button>
-          {verClases && <div className="rp-clases">
-            {candidatas.map((c) => <label key={c.id}><input type="checkbox" checked={!excluidas.has(c.id)} onChange={() => { const s = new Set(excluidas); if (s.has(c.id)) s.delete(c.id); else s.add(c.id); setExcluidas(s); }} /> {c.nombre}</label>)}
-          </div>}</div>
-        <label className="rp-f"><span>Institución</span><input value={inst} onChange={(e) => setInst(e.target.value)} placeholder="Nombre de la universidad" /></label>
-        <div className="rp-f"><span>Secciones</span>
-          {SECCIONES.map(([k, t]) => <label key={k} className="rp-chk"><input type="checkbox" checked={S(k)} onChange={() => { const s = new Set(secs); if (s.has(k)) s.delete(k); else s.add(k); setSecs(s); }} /> {t}</label>)}
-          <label className="rp-chk"><input type="checkbox" checked={nombres} onChange={(e) => setNombres(e.target.checked)} /> Incluir nombres de estudiantes con apoyo</label>
+
+        {/* lo que va a salir, siempre a la vista */}
+        <div className={"rp-resumen" + (clases.length ? "" : " vacio")}>
+          <b>{clases.length ? plural(clases.length, "grupo", "grupos") : "Ningún grupo"}</b>
+          <span>{clases.length ? `${plural(todas.length, "estudiante", "estudiantes")} · ${plural(hojas.length, "hoja", "hojas")}` : "Elige al menos un grupo para armar el reporte"}</span>
         </div>
+
+        <div className="rp-paso"><i>1</i><span>Qué evaluar</span></div>
+        {asignaturas.length > 0 && <div className="rp-f"><span>Asignatura</span>
+          <div className="rp-pills">
+            {["", ...asignaturas].map((a) => <button key={a || "_"} type="button" className={"rp-pill" + (asig === a ? " on" : "")}
+              onClick={() => { setAsig(a); setExcluidas(new Set()); setBuscar(""); }}>
+              {a || "Todas"}<small>{snap.clases.filter((c) => enFiltro(c, a, periodo)).length}</small></button>)}
+          </div></div>}
+        {periodos.length > 0 && <div className="rp-f"><span>Período</span>
+          <div className="rp-pills">
+            {["", ...periodos].map((p) => <button key={p || "_"} type="button" className={"rp-pill" + (periodo === p ? " on" : "")}
+              onClick={() => { setPeriodo(p); setExcluidas(new Set()); setBuscar(""); }}>
+              {p || "Todos"}<small>{snap.clases.filter((c) => enFiltro(c, asig, p)).length}</small></button>)}
+          </div></div>}
+
+        <div className="rp-paso"><i>2</i><span>Grupos</span>
+          <em>{clases.length}/{seleccionables.length}</em>
+          {seleccionables.length > 1 && <>
+            <button type="button" className="rp-link" disabled={clases.length === seleccionables.length} onClick={() => setExcluidas(new Set())}>Todos</button>
+            <button type="button" className="rp-link" disabled={!clases.length} onClick={() => setExcluidas(new Set(candidatas.map((c) => c.id)))}>Ninguno</button>
+          </>}
+        </div>
+        {candidatas.length > 6 && <input className="rp-buscar" type="search" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={`Buscar entre ${candidatas.length} clases…`} />}
+        <div className="rp-grupos">
+          {!candidatas.length && <p className="muted small">No hay clases con estos filtros.</p>}
+          {visibles.map((c) => {
+            const rs = rowsByClase.get(c.id) ?? [];
+            const ok = rs.length > 0, on = ok && !excluidas.has(c.id);
+            const crr = ok ? rs.reduce((s, r) => s + (r.indice ?? 0), 0) / rs.length : null;
+            const j = juegoByClase.get(c.id);
+            return <label key={c.id} className={"rp-grupo" + (on ? " on" : "") + (ok ? "" : " off")} title={ok ? "" : "Esta clase aún no tiene informe de competencias: no aporta al reporte"}>
+              <input type="checkbox" disabled={!ok} checked={on} onChange={() => setExcluidas((x) => { const s = new Set(x); if (s.has(c.id)) s.delete(c.id); else s.add(c.id); return s; })} />
+              <i style={{ background: c.color }} />
+              <span className="n">{c.nombre}</span>
+              <span className="d">{ok ? <>{rs.length} est. · CRR {fmt(crr)}{j?.meta ? ` · T${j.meta}` : ""}</> : "Sin informe"}</span>
+              {ok && seleccionables.length > 1 && <button type="button" className="rp-solo" title="Incluir solo este grupo"
+                onClick={(e) => { e.preventDefault(); setExcluidas(new Set(candidatas.filter((x) => x.id !== c.id).map((x) => x.id))); }}>Solo este</button>}
+            </label>;
+          })}
+        </div>
+
+        <div className="rp-paso"><i>3</i><span>Contenido</span></div>
+        <div className="rp-secs">
+          {SECCIONES.map(([k, t]) => {
+            const pag = hojas.findIndex((h) => h.includes(k));
+            return <div key={k} className={"rp-sec" + (S(k) ? " on" : "")}>
+              <button type="button" className="rp-switch" role="switch" aria-checked={S(k)} aria-label={t}
+                onClick={() => setSecs((x) => { const s = new Set(x); if (s.has(k)) s.delete(k); else s.add(k); return s; })}><span /></button>
+              <span className="t">{t}</span>
+              {pag >= 0 ? <button type="button" className="rp-ir" title="Ver en el reporte" onClick={() => document.querySelectorAll(".rp-doc .rp-page")[pag]?.scrollIntoView({ behavior: "smooth", block: "start" })}>pág. {pag + 1}</button>
+                : S(k) ? <small className="muted" title="No hay datos para esta sección con los grupos elegidos">sin datos</small> : null}
+              {k === "apoyo" && S(k) && <label className="rp-sub-op"><input type="checkbox" checked={nombres} onChange={(e) => setNombres(e.target.checked)} /> Mostrar nombres</label>}
+            </div>;
+          })}
+        </div>
+        <label className="rp-f"><span>Institución (portada)</span><input value={inst} onChange={(e) => setInst(e.target.value)} placeholder="Nombre de la universidad" /></label>
+        <p className="muted small">Haz clic en cualquier texto del reporte para corregirlo antes de descargarlo.</p>
+
         <div className="rp-acts">
           <button className="btn primary" disabled={!clases.length} onClick={() => window.print()}><Icon name="download" size={16} /> Descargar PDF</button>
           <button className="btn" disabled={!clases.length} onClick={copiar}>Copiar resumen para correo</button>
@@ -109,7 +168,7 @@ export default function Reporte() {
       </aside>
 
       <div className="rp-doc">
-        {!clases.length ? <div className="rp-page rp-vacio"><p>No hay clases con esos filtros.</p></div> : <>
+        {!clases.length ? <div className="rp-page rp-vacio"><p>{seleccionables.length ? "Elige al menos un grupo en el panel para armar el reporte." : "No hay clases con informe de competencias para estos filtros."}</p></div> : <>
           {/* Portada */}
           <section className="rp-page rp-portada">
             <div className="rp-banda" />
@@ -129,7 +188,7 @@ export default function Reporte() {
 
           {/* Resumen ejecutivo */}
           <section className="rp-page">
-            <Cab n={1} t="Resumen ejecutivo" />
+            <Cab n={num("resumen")} t="Resumen ejecutivo" />
             <E id="resumen">{txt.resumen}</E>
             <h3 className="rp-h3">Hallazgos principales</h3>
             <ul className="rp-list">{txt.hallazgos.map((h, i) => <E key={i} id={"h" + i} as="li">{h}</E>)}</ul>
@@ -141,7 +200,7 @@ export default function Reporte() {
           </section>
 
           {S("grupos") && <section className="rp-page">
-            <Cab n={2} t="Comparativa de grupos" />
+            <Cab n={num("grupos")} t="Comparativa de grupos" />
             <p className="rp-lead">Ordenados por CRR. La barra muestra el CRR; a la derecha, la participación en la simulación y su Scorecard.</p>
             <table className="rp-tabla">
               <thead><tr><th>#</th><th>Grupo</th><th className="num">Est.</th><th>CRR</th><th className="num">Apoyo</th>{rep.sim.conJuego > 0 && <><th className="num">Simulación</th><th className="num">Scorecard</th></>}</tr></thead>
@@ -156,7 +215,7 @@ export default function Reporte() {
           </section>}
 
           {S("competencias") && labels.length >= 3 && <section className="rp-page">
-            <Cab n={3} t="Perfil de competencias" />
+            <Cab n={num("competencias")} t="Perfil de competencias" />
             <div className="rp-radar">
               <Radar compact={false} size={470} labels={labels} invert series={[
                 { name: "Promedio del conjunto", color: "#0a84ff", values: pick(avgVector(todas, metrics)), index: rep.crr },
@@ -175,15 +234,15 @@ export default function Reporte() {
             </>}
           </section>}
 
-          {(S("carreras") || S("simulacion")) && <section className="rp-page">
-            {S("carreras") && <>
-              <Cab n={4} t="Carreras" />
+          {cs.length > 0 && <section className="rp-page">
+            {cs.includes("carreras") && <>
+              <Cab n={num("carreras")} t="Carreras" />
               <table className="rp-tabla"><thead><tr><th>Carrera</th><th className="num">Estudiantes</th><th className="num">CRR</th><th>Competencia más fuerte</th></tr></thead>
                 <tbody>{rep.carreras.slice(0, 14).map((c) => <tr key={c.carrera}><td>{c.carrera}</td><td className="num">{c.n}</td><td className="num"><b>{fmt(c.crr)}</b></td><td>{c.fuerte ? metricName(c.fuerte) : "—"}</td></tr>)}</tbody></table>
               {rep.carreras.length > 14 && <p className="rp-nota">y {plural(rep.carreras.length - 14, "carrera más", "carreras más")} con pocos estudiantes.</p>}
             </>}
-            {S("simulacion") && rep.sim.conJuego > 0 && <>
-              <Cab n={5} t="Simulación" />
+            {cs.includes("simulacion") && <>
+              <Cab n={num("simulacion")} t="Simulación" />
               <div className="rp-kpis chico">
                 <Kpi label="Completaron" v={`${rep.sim.completos} de ${rep.sim.jugadores}`} sub={rep.sim.trimestre ? `llegaron al trimestre ${rep.sim.trimestre}` : ""} />
                 <Kpi label="Scorecard acumulado" v={fmt(rep.sim.scorecard)} sub="promedio" />
@@ -194,7 +253,7 @@ export default function Reporte() {
           </section>}
 
           {S("apoyo") && <section className="rp-page">
-            <Cab n={6} t="Estudiantes que necesitan apoyo" />
+            <Cab n={num("apoyo")} t="Estudiantes que necesitan apoyo" />
             {rep.apoyo.length ? <>
               <p className="rp-lead">{plural(rep.apoyo.length, "estudiante tiene", "estudiantes tienen")} un CRR menor de 34. Por grupo:</p>
               <div className="rp-chips">{rep.grupos.filter((g) => g.bajo).map((g) => <span key={g.clase.id}>{g.clase.nombre} <b>{g.bajo}</b></span>)}</div>
@@ -204,7 +263,7 @@ export default function Reporte() {
           </section>}
 
           {S("cierre") && <section className="rp-page">
-            <Cab n={7} t="Conclusiones y recomendaciones" />
+            <Cab n={num("cierre")} t="Conclusiones y recomendaciones" />
             <h3 className="rp-h3">Conclusiones</h3>
             <ul className="rp-list">{txt.conclusiones.map((h, i) => <E key={i} id={"c" + i} as="li">{h}</E>)}</ul>
             <h3 className="rp-h3">Recomendaciones</h3>
