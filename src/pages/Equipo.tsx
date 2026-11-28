@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp, usePref } from "../data/store";
 import { AsignacionRapida } from "../components/Asignacion";
+import { CarrerasPicker } from "../components/CarrerasPicker";
 import { Avatar, Empty, Icon, Modal, Segmented } from "../components/ui";
 import { LevelBar } from "../components/Charts";
 import { avgIndex, fmt, plural } from "../lib/metrics";
@@ -227,7 +228,8 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
   const decanos = snap.profiles.filter((x) => x.rol === "decano");
   const self = p?.id === user!.id;
   // códigos de carrera conocidos (de los estudiantes y del catálogo), sin las variantes R/S que usan el perfil de su base
-  const codigosCarrera = [...new Set([...snap.resultados.map((r) => r.carrera), ...snap.carreras.map((c) => c.codigo)].filter(Boolean).map((c) => c.toUpperCase()))].sort();
+  const nombresCarrera = new Map(snap.carreras.map((c) => [c.codigo.toUpperCase(), c.nombre]));
+  const codigosCarrera =[...new Set([...snap.resultados.map((r) => r.carrera), ...snap.carreras.map((c) => c.codigo)].filter(Boolean).map((c) => c.toUpperCase()))].sort();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);
@@ -278,8 +280,7 @@ function UserModal({ p, decanoFor, onClose }: { p: Profile | null; decanoFor: st
         )}
         {isAdmin && f.rol === "decano" && codigosCarrera.length > 0 && (
           <div className="field"><span>Carreras a cargo <small className="muted">(puede ajustar su ponderación)</small></span>
-            <div className="chips">{codigosCarrera.map((c) => { const on = f.carreras.includes(c); return (
-              <button type="button" key={c} className={"pchip" + (on ? " on" : "")} onClick={() => setF({ ...f, carreras: on ? f.carreras.filter((x) => x !== c) : [...f.carreras, c] })}>{c}{on && <Icon name="check" size={12} />}</button>); })}</div></div>
+            <CarrerasPicker codigos={codigosCarrera} nombres={nombresCarrera} value={f.carreras} onChange={(carreras) => setF({ ...f, carreras })} /></div>
         )}
         {isAdmin && f.rol === "maestro" && (
           <label className="field"><span>{D().one} a cargo</span>

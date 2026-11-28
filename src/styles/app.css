@@ -1424,3 +1424,19 @@ button.ms { cursor: pointer; }
   body[data-print="reporte"] .rp-edit:hover, body[data-print="reporte"] .rp-edit:focus { background: none; box-shadow: none; }
   body[data-print="reporte"] .card { border: 0; }
 }
+
+/* Selector de carreras (cuentas de coordinador) */
+.carpick { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--fill-1); border: 1px solid var(--sep); }
+.carpick-bar { display: flex; align-items: center; gap: 6px; }
+.carpick-n { font-size: 12.5px; color: var(--text-3); margin-right: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.carpick-n b { color: var(--text); font-weight: 700; }
+.carpick-bar input, .field .carpick-bar input { height: 30px; padding: 0 10px; border-radius: 9px; font-size: 12.5px; width: 150px; min-width: 0; flex: 0 1 150px; }
+.carpick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; max-height: 216px; overflow: auto; padding: 2px; }
+.carpick-it { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "c b" "c s"; column-gap: 8px; align-items: center; text-align: left; padding: 7px 9px; border-radius: 10px; border: 1px solid var(--sep); background: var(--card); color: var(--text); cursor: pointer; font: inherit; transition: border-color .15s, background .15s; min-height: 40px; }
+.carpick-it:hover { border-color: var(--fill-3); }
+.carpick-it i { grid-area: c; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--fill-3); color: #fff; transition: background .15s, border-color .15s; }
+.carpick-it b { grid-area: b; font-size: 12.5px; font-weight: 700; letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carpick-it small { grid-area: s; font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carpick-it.on { border-color: var(--accent); background: var(--accent-soft); }
+.carpick-it.on i { background: var(--accent); border-color: var(--accent); }
+@media (max-width: 480px) { .carpick-bar { flex-wrap: wrap; } .carpick-bar input, .field .carpick-bar input { flex: 1 1 100%; order: 5; width: auto; } }
